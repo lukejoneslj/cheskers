@@ -1,5 +1,7 @@
 # Cheskers
 
+**Play: [cheskers.vercel.app](https://cheskers.vercel.app)**
+
 Chess and checkers on one board. Your back rank is a normal chess set; in front
 of it stands a rank of checkers instead of pawns. There is no check and no
 checkmate — **capture the enemy King and you win**, so you have to guard yours
@@ -113,16 +115,29 @@ client sign-in fails with `auth/configuration-not-found`.
 
 ### Deploying to Vercel
 
+Already deployed and connected to this repo — pushing to `main` redeploys
+production automatically. To set it up from scratch:
+
 ```bash
-npx vercel
+vercel link --yes --project cheskers
+vercel env add VITE_FIREBASE_API_KEY production   # ...and the other four
+vercel --prod --yes
 ```
 
-Add the same five `VITE_FIREBASE_*` values in **Vercel → Project → Settings →
-Environment Variables**, then redeploy. `vercel.json` already sets the build
-command, output directory and long-lived caching for sprites.
+The `VITE_*` values must exist **before** the build: Vite inlines them at build
+time, so adding them afterwards does nothing until you redeploy. `vercel.json`
+sets the build command, output directory and long-lived caching for sprites.
 
-Finally, add your Vercel domain under **Firebase → Authentication → Settings →
-Authorized domains**, or anonymous sign-in will be refused in production.
+Then authorize the domain under **Firebase → Authentication → Settings →
+Authorized domains**, or sign-in is refused in production.
+
+**Note on preview URLs.** Vercel's Deployment Protection is on, so the
+project-scoped and per-deployment URLs
+(`cheskers-<hash>-<team>.vercel.app`) sit behind a Vercel login. The
+production alias `cheskers.vercel.app` is public and is the one to share.
+If you want preview deployments to be playable by others, turn off
+Deployment Protection in **Vercel → Project → Settings → Deployment
+Protection**, and add that domain to Firebase's authorized domains too.
 
 ---
 
