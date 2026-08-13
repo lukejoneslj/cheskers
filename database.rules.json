@@ -1,0 +1,138 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      // Ratings are public: the leaderboard needs them, and so does the client
+      // computing an Elo change against its opponent.
+      ".read": "auth != null",
+      ".indexOn": "rating",
+
+      "$uid": {
+        // You may only ever write your own row.
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'rating'])",
+
+        "name": { ".validate": "newData.isString() && newData.val().length <= 12" },
+
+        "rating": {
+          // Bounded so a single write can never move a rating further than one
+          // game legitimately could. See MAX_DELTA in src/engine/elo.ts.
+          ".validate": "newData.isNumber() && newData.val() >= 100 && newData.val() <= 4000 && (!data.exists() || (newData.val() - data.val() <= 40 && data.val() - newData.val() <= 40))"
+        },
+
+        // Counters may only ever move forward, and only one game at a time.
+        "games":  { ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || (newData.val() >= data.val() && newData.val() - data.val() <= 1))" },
+        "wins":   { ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || (newData.val() >= data.val() && newData.val() - data.val() <= 1))" },
+        "losses": { ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || (newData.val() >= data.val() && newData.val() - data.val() <= 1))" },
+        "draws":  { ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || (newData.val() >= data.val() && newData.val() - data.val() <= 1))" },
+
+        "rated": {
+          "$room": {
+            "$generation": {
+              // Write-once, and only for a room you actually sat in. This is
+              // what stops the same game being scored twice, and stops a
+              // rating being claimed for a game that never happened.
+              //
+              // Both constraints live in .validate rather than .write on
+              // purpose: a granting .write on an ancestor (here users/$uid)
+              // cascades down and would make a stricter .write on this node
+              // dead code, whereas every .validate on the path must pass.
+              ".validate": "newData.val() === true && !data.exists() && (root.child('rooms/' + $room + '/players/w/uid').val() === auth.uid || root.child('rooms/' + $room + '/players/b/uid').val() === auth.uid)"
+            }
+          }
+        },
+
+        "$other": { ".validate": false }
+      }
+    },
+
+    "rooms": {
+      "$code": {
+        // Anyone with the code can watch a game; codes are the only secret.
+        ".read": "auth != null",
+
+        // Whole-room writes are only ever allowed to CREATE a room. Every
+        // later change has to go through one of the narrower child rules
+        // below, which is what stops a client rewriting the move log.
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['generation', 'rules', 'status', 'players'])",
+
+        "createdAt": { ".validate": "newData.isNumber()" },
+
+        "generation": {
+          // Bumped when both players agree a rematch.
+          ".write": "auth != null && (root.child('rooms/' + $code + '/players/w/uid').val() === auth.uid || root.child('rooms/' + $code + '/players/b/uid').val() === auth.uid)",
+          ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val() + 1)"
+        },
+
+        "status": {
+          ".write": "auth != null && (root.child('rooms/' + $code + '/players/w/uid').val() === auth.uid || root.child('rooms/' + $code + '/players/b/uid').val() === auth.uid)",
+          ".validate": "newData.val() === 'waiting' || newData.val() === 'playing' || newData.val() === 'over'"
+        },
+
+        "rules": {
+          // Fixed at creation: changing the ruleset mid-game would desync the
+          // two engines.
+          ".write": false,
+          ".validate": "newData.hasChildren(['forcedJumps', 'lossOnNoMoves'])"
+        },
+
+        "resigned": {
+          // You may only ever concede on your own behalf.
+          ".write": "auth != null && (root.child('rooms/' + $code + '/players/w/uid').val() === auth.uid || root.child('rooms/' + $code + '/players/b/uid').val() === auth.uid)",
+          ".validate": "!newData.exists() || ((newData.val() === 'w' || newData.val() === 'b') && root.child('rooms/' + $code + '/players/' + newData.val() + '/uid').val() === auth.uid)"
+        },
+
+        "rematchOffer": {
+          ".write": "auth != null && (root.child('rooms/' + $code + '/players/w/uid').val() === auth.uid || root.child('rooms/' + $code + '/players/b/uid').val() === auth.uid)",
+          ".validate": "!newData.exists() || newData.val() === 'w' || newData.val() === 'b'"
+        },
+
+        "players": {
+          // Joining rewrites this whole node, so the write necessarily carries
+          // the other player's seat along with it. The guard is therefore that
+          // an already-occupied seat must come back byte-for-byte unchanged --
+          // that is what stops anyone evicting or impersonating an opponent,
+          // while still letting them claim the empty seat beside them.
+          ".write": "auth != null && (!data.child('w').exists() || (newData.child('w/uid').val() === data.child('w/uid').val() && newData.child('w/name').val() === data.child('w/name').val())) && (!data.child('b').exists() || (newData.child('b/uid').val() === data.child('b/uid').val() && newData.child('b/name').val() === data.child('b/name').val()))",
+          "$color": {
+            // An empty seat may only ever be claimed for yourself.
+            ".validate": "($color === 'w' || $color === 'b') && newData.hasChildren(['uid', 'name']) && (data.exists() ? newData.child('uid').val() === data.child('uid').val() : newData.child('uid').val() === auth.uid)",
+            "uid": { ".validate": "newData.isString()" },
+            "name": { ".validate": "newData.isString() && newData.val().length <= 12" },
+            "$other": { ".validate": false }
+          }
+        },
+
+        "presence": {
+          "$color": {
+            // Only the occupant of a seat may report that seat online.
+            ".write": "auth != null && root.child('rooms/' + $code + '/players/' + $color + '/uid').val() === auth.uid",
+            ".validate": "newData.isBoolean()"
+          }
+        },
+
+        "moves": {
+          // Deleting the entire log is permitted (that is a rematch); editing
+          // an individual played move is not.
+          ".write": "auth != null && !newData.exists() && (root.child('rooms/' + $code + '/players/w/uid').val() === auth.uid || root.child('rooms/' + $code + '/players/b/uid').val() === auth.uid)",
+
+          "$moveId": {
+            // Append-only: a move, once written, can never be changed.
+            ".write": "auth != null && !data.exists() && newData.exists()",
+            // A move may only be written by the player who owns that seat.
+            ".validate": "newData.hasChildren(['from', 'to', 'by']) && root.child('rooms/' + $code + '/players/' + newData.child('by').val() + '/uid').val() === auth.uid",
+            "from": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 63" },
+            "to": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 63" },
+            "by": { ".validate": "newData.val() === 'w' || newData.val() === 'b'" },
+            "$other": { ".validate": false }
+          }
+        },
+
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

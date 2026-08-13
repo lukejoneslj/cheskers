@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10121a">
+<meta name="description" content="Cheskers — chess and checkers on one board. Take the king to win.">
+<title>Cheskers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+
+<div id="app" class="app">
+
+  <header class="topbar">
+    <h1 class="logo">
+      <span class="logo-ches">CHES</span><span class="logo-kers">KERS</span>
+    </h1>
+    <div class="topbar-actions">
+      <button id="btn-profile" class="profile-chip" type="button" title="Account and rating">
+        <span class="profile-name" id="profile-name">—</span>
+        <span class="profile-rating" id="profile-rating">····</span>
+      </button>
+      <button id="btn-sound" class="chip" type="button" aria-pressed="false" title="Toggle sound">
+        <span id="sound-icon">♪</span>
+      </button>
+      <button id="btn-help" class="chip" type="button" title="How to play">?</button>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <!-- ---------------------------------------------------------------- -->
+    <aside class="column column-left">
+      <section class="player-card" id="card-b" data-color="b">
+        <div class="player-head">
+          <span class="player-dot"></span>
+          <span class="player-name" id="name-b">BLACK</span>
+          <span class="player-elo" id="elo-b" hidden></span>
+          <span class="player-count" id="count-b">16</span>
+        </div>
+        <div class="tray" id="tray-b" aria-label="Pieces captured by Black"></div>
+      </section>
+
+      <section class="player-card" id="card-w" data-color="w">
+        <div class="player-head">
+          <span class="player-dot"></span>
+          <span class="player-name" id="name-w">WHITE</span>
+          <span class="player-elo" id="elo-w" hidden></span>
+          <span class="player-count" id="count-w">16</span>
+        </div>
+        <div class="tray" id="tray-w" aria-label="Pieces captured by White"></div>
+      </section>
+
+      <div class="banner" id="banner">
+        <span id="banner-text">WHITE TO MOVE</span>
+      </div>
+    </aside>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="board-wrap">
+      <div class="board-frame" id="board-frame">
+        <div class="ranks" id="ranks" aria-hidden="true"></div>
+        <div class="files" id="files" aria-hidden="true"></div>
+        <canvas id="board" role="img" aria-label="Cheskers board"></canvas>
+      </div>
+      <p class="hint" id="hint"></p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <aside class="column column-right">
+      <section class="panel log-panel">
+        <h2 class="panel-title">MOVES</h2>
+        <ol class="log" id="log"></ol>
+      </section>
+
+      <section class="panel">
+        <div class="button-stack">
+          <button id="btn-new" class="btn btn-primary" type="button">NEW GAME</button>
+          <button id="btn-online" class="btn btn-accent" type="button">PLAY ONLINE</button>
+          <button id="btn-flip" class="btn" type="button">FLIP BOARD</button>
+          <button id="btn-resign" class="btn btn-danger" type="button">RESIGN</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel-title">RULES</h2>
+        <label class="toggle">
+          <input type="checkbox" id="opt-forced" checked>
+          <span class="toggle-box"></span>
+          <span class="toggle-label">Forced jumps</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="opt-stuck" checked>
+          <span class="toggle-box"></span>
+          <span class="toggle-label">No moves = loss</span>
+        </label>
+      </section>
+    </aside>
+
+  </main>
+</div>
+
+<!-- Game over -------------------------------------------------------- -->
+<div class="modal-backdrop" id="over-modal" hidden>
+  <div class="modal">
+    <h2 class="modal-title" id="over-title">WHITE WINS</h2>
+    <p class="modal-body" id="over-body">King captured.</p>
+    <div class="rating-change" id="rating-change" hidden>
+      <span class="rating-change-label">RATING</span>
+      <span class="rating-change-value" id="rating-before">1200</span>
+      <span class="rating-change-arrow">→</span>
+      <span class="rating-change-value" id="rating-after">1210</span>
+      <span class="rating-change-delta" id="rating-delta">+10</span>
+    </div>
+    <div class="modal-actions">
+      <button id="over-again" class="btn btn-primary" type="button">PLAY AGAIN</button>
+      <button id="over-close" class="btn" type="button">VIEW BOARD</button>
+    </div>
+  </div>
+</div>
+
+<!-- Account --------------------------------------------------------- -->
+<div class="modal-backdrop" id="account-modal" hidden>
+  <div class="modal">
+    <h2 class="modal-title">PROFILE</h2>
+
+    <div class="profile-card">
+      <div class="profile-row">
+        <input id="account-name" class="field field-name" type="text" maxlength="12"
+               placeholder="PLAYER" autocomplete="off" aria-label="Display name">
+        <span class="rank-badge" id="account-rank" data-tier="novice">NOVICE</span>
+      </div>
+      <div class="stat-grid">
+        <div class="stat"><span class="stat-value" id="stat-rating">1200</span><span class="stat-label">RATING</span></div>
+        <div class="stat"><span class="stat-value" id="stat-games">0</span><span class="stat-label">GAMES</span></div>
+        <div class="stat"><span class="stat-value" id="stat-wins">0</span><span class="stat-label">WON</span></div>
+        <div class="stat"><span class="stat-value" id="stat-losses">0</span><span class="stat-label">LOST</span></div>
+      </div>
+    </div>
+
+    <div id="account-guest">
+      <p class="modal-body account-note">
+        You are playing as a guest. Sign in to keep your rating on any device —
+        your current rating comes with you.
+      </p>
+      <button id="account-google" class="btn btn-primary lobby-btn" type="button">
+        SIGN IN WITH GOOGLE
+      </button>
+      <div class="lobby-or"><span>OR</span></div>
+      <input id="account-email" class="field" type="email" placeholder="EMAIL" autocomplete="username">
+      <input id="account-password" class="field field-spaced" type="password"
+             placeholder="PASSWORD" autocomplete="current-password">
+      <div class="lobby-join">
+        <button id="account-signup" class="btn btn-accent" type="button">CREATE</button>
+        <button id="account-signin" class="btn" type="button">SIGN IN</button>
+      </div>
+    </div>
+
+    <div id="account-member" hidden>
+      <p class="modal-body account-note" id="account-email-label">Signed in.</p>
+      <button id="account-signout" class="btn btn-danger lobby-btn" type="button">SIGN OUT</button>
+    </div>
+
+    <p class="lobby-error" id="account-error"></p>
+
+    <h2 class="modal-title leaderboard-title">TOP PLAYERS</h2>
+    <ol class="leaderboard" id="leaderboard"><li class="empty">No rated games yet</li></ol>
+
+    <div class="modal-actions">
+      <button id="account-close" class="btn" type="button">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Multiplayer lobby ------------------------------------------------ -->
+<div class="modal-backdrop" id="lobby-modal" hidden>
+  <div class="modal">
+    <h2 class="modal-title">PLAY ONLINE</h2>
+
+    <div id="lobby-setup" hidden>
+      <p class="modal-body">
+        Multiplayer needs a Firebase project. Add your keys to
+        <b>.env.local</b> and restart, then this panel becomes the lobby.
+        See <b>README.md</b> for the four commands.
+      </p>
+    </div>
+
+    <div id="lobby-home">
+      <label class="field-label" for="lobby-name">YOUR NAME</label>
+      <input id="lobby-name" class="field" type="text" maxlength="12" placeholder="PLAYER">
+
+      <button id="lobby-create" class="btn btn-primary lobby-btn" type="button">
+        CREATE ROOM
+      </button>
+
+      <div class="lobby-or"><span>OR</span></div>
+
+      <label class="field-label" for="lobby-code">ROOM CODE</label>
+      <div class="lobby-join">
+        <input id="lobby-code" class="field field-code" type="text" maxlength="4"
+               placeholder="ABCD" autocapitalize="characters" autocomplete="off">
+        <button id="lobby-join" class="btn btn-accent" type="button">JOIN</button>
+      </div>
+    </div>
+
+    <div id="lobby-waiting" hidden>
+      <p class="modal-body">Share this code with your opponent:</p>
+      <div class="room-code" id="room-code">----</div>
+      <button id="lobby-copy" class="btn lobby-btn" type="button">COPY LINK</button>
+      <p class="modal-body lobby-status" id="lobby-status">Waiting for an opponent…</p>
+    </div>
+
+    <p class="lobby-error" id="lobby-error"></p>
+
+    <div class="modal-actions">
+      <button id="lobby-close" class="btn" type="button">CLOSE</button>
+      <button id="lobby-leave" class="btn btn-danger" type="button" hidden>LEAVE ROOM</button>
+    </div>
+  </div>
+</div>
+
+<!-- How to play ------------------------------------------------------ -->
+<div class="modal-backdrop" id="help-modal" hidden>
+  <div class="modal modal-wide">
+    <h2 class="modal-title">HOW TO PLAY</h2>
+    <div class="modal-body help-body">
+      <p><b>The board.</b> Your back rank is a normal chess set. In front of it
+        stands a rank of checkers, not pawns.</p>
+      <p><b>Chess pieces</b> move and capture exactly as they do in chess.</p>
+      <p><b>Checkers</b> step diagonally forward and capture by hopping an
+        adjacent enemy — any enemy, including a queen — onto the empty square
+        beyond. Land another hop and you keep going in the same turn.</p>
+      <p><b>Crowning.</b> A checker reaching the far rank is crowned and may
+        then move backwards. Crowning ends your turn, even mid-hop.</p>
+      <p><b>Winning.</b> There is no check and no checkmate. Capture the enemy
+        King and the game is over, so guard yours yourself.</p>
+      <p><b>Forced jumps.</b> With this rule on, if any hop is available you
+        must take one — even if you would rather move a chess piece.</p>
+    </div>
+    <div class="modal-actions">
+      <button id="help-close" class="btn btn-primary" type="button">GOT IT</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
