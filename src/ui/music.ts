@@ -33,7 +33,7 @@ export class Music {
   private enabled = true;
   private generation = 0;
   private fadeRaf = 0;
-  private pending: TrackKey | null = null;
+  private blocked: HTMLAudioElement | null = null;
 
   constructor() {
     for (const el of [this.a, this.b]) {
@@ -60,12 +60,20 @@ export class Music {
     }
   }
 
-  /** Retry a track that autoplay policy blocked, from inside a user gesture. */
+  /** Retry a track that autoplay policy blocked, from inside a user gesture.
+   *
+   *  This has to retry `.play()` on the exact blocked element rather than
+   *  going through `crossfadeTo()` -- that bails out immediately whenever the
+   *  requested key already matches `current`, which it always does here
+   *  since `crossfadeTo()` sets `current` before the play() attempt that just
+   *  failed. Routing the retry through it would silently no-op. */
   unlock(): void {
-    if (!this.pending) return;
-    const key = this.pending;
-    this.pending = null;
-    this.crossfadeTo(key);
+    if (!this.blocked) return;
+    const el = this.blocked;
+    this.blocked = null;
+    el.play().catch(() => {
+      this.blocked = el;
+    });
   }
 
   playTitle(): void {
@@ -102,7 +110,7 @@ export class Music {
 
     incoming.play().catch(() => {
       // Blocked until a gesture arrives; unlock() retries once one lands.
-      this.pending = key;
+      this.blocked = incoming;
     });
 
     this.fade(outgoing, incoming, gen);
