@@ -21,6 +21,14 @@ type ClipKey = keyof typeof CLIPS;
 
 const CLIP_VOLUME = 0.55;
 
+/** How far playback rate (recorded clips) and frequency (tones) wander from
+ *  centre, as a fraction. The same clip playing dozens of times a game reads
+ *  as a machine-gun loop without this -- a few percent of pitch drift is
+ *  enough to sell "a person hit this" rather than "a sample retriggered". */
+const PITCH_JITTER = 0.06;
+
+const jitter = (amount = PITCH_JITTER): number => 1 + (Math.random() * 2 - 1) * amount;
+
 export class Sound {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -70,6 +78,12 @@ export class Sound {
     if (!master) return;
     const instance = master.cloneNode(true) as HTMLAudioElement;
     instance.volume = CLIP_VOLUME;
+    // Without this, Chrome/Firefox time-stretch to correct for the rate
+    // change and the pitch never actually moves.
+    (instance as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = false;
+    (instance as HTMLAudioElement & { mozPreservesPitch?: boolean }).mozPreservesPitch = false;
+    (instance as HTMLAudioElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = false;
+    instance.playbackRate = jitter();
     void instance.play().catch(() => {});
   }
 
@@ -90,9 +104,9 @@ export class Sound {
     const osc = ctx.createOscillator();
     const env = ctx.createGain();
     osc.type = wave;
-    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.setValueAtTime(freq * jitter(), t);
     if (slideTo !== undefined) {
-      osc.frequency.exponentialRampToValueAtTime(Math.max(1, slideTo), t + duration);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(1, slideTo * jitter()), t + duration);
     }
     env.gain.setValueAtTime(0, t);
     env.gain.linearRampToValueAtTime(gain, t + 0.008);

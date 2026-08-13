@@ -183,7 +183,10 @@ describe('checker movement', () => {
 
 describe('compulsory capture', () => {
   it('restricts the mover to hops when one is available', () => {
-    const s = position({ d4: 'wc', e5: 'bc', a1: 'wR' });
+    const s = position(
+      { d4: 'wc', e5: 'bc', a1: 'wR' },
+      { rules: { ...DEFAULT_RULES, forcedJumps: true } },
+    );
     const moves = legalMoves(s);
     expect(moves.every((m) => m.isJump)).toBe(true);
     expect(targets(moves)).toEqual(['f6']);

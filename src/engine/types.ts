@@ -68,7 +68,7 @@ export interface Rules {
 }
 
 export const DEFAULT_RULES: Rules = {
-  forcedJumps: true,
+  forcedJumps: false,
   lossOnNoMoves: true,
 };
 
