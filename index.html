@@ -13,7 +13,20 @@
 </head>
 <body>
 
-<div id="app" class="app">
+<!-- Title screen ------------------------------------------------------ -->
+<div id="title-screen" class="title-screen">
+  <video id="title-video" class="title-video" autoplay muted loop playsinline></video>
+  <div class="title-scrim"></div>
+  <div class="title-content">
+    <h1 class="title-logo">
+      <span class="logo-ches">CHES</span><span class="logo-kers">KERS</span>
+    </h1>
+    <button id="title-start" class="btn btn-primary title-start-btn" type="button">START GAME</button>
+  </div>
+</div>
+<div id="title-fade" class="title-fade" hidden></div>
+
+<div id="app" class="app" hidden>
 
   <header class="topbar">
     <h1 class="logo">

@@ -10,6 +10,12 @@ yourself.
 Pixel art, hand-tuned animation, hotseat and online play. Built as a static
 site: Vite + TypeScript, no framework, no backend of its own.
 
+A cinematic title screen opens the game, with a looping video backdrop and its
+own soundtrack; a white-flash transition hands off to the board. From there,
+music crossfades between a "selecting game mode" track while idle and two
+gameplay tracks that alternate for the duration of a match — the handoff
+starts a couple of seconds before each track ends so there's never a gap.
+
 ---
 
 ## Rules
@@ -207,16 +213,26 @@ and was silently bypassable until the rule test caught it.
 ## Layout
 
 ```
-assets/                   Original sprite sheets (source of truth)
+assets/                   Original sprite sheets, title video, music, SFX (source of truth)
 tools/extract_sprites.py  Background removal + slicing -> public/sprites
 tools/test-rules.mjs      Security-rule tests over the REST API
 public/sprites/           16 transparent PNGs, one shared pixel grid
+public/video/             Title screen loop, re-encoded with audio stripped
+public/music/             Title, menu, and two alternating gameplay tracks
+public/sfx/               Recorded hit sounds for move/jump/capture/crown/click
 src/engine/               Pure rules + Elo. No DOM. 55 unit tests.
 src/render/               Canvas renderer, tweens, particles, palette
 src/net/                  Firebase bootstrap, accounts, room sync
-src/ui/                   App controller, lobby, profile, procedural sound
+src/ui/                   App controller, lobby, profile, title screen, sound + music
 database.rules.json       Realtime Database security rules
 ```
+
+Sound is a mix of five recorded clips (move, jump, capture, crown, and a
+generic UI click) and procedural chiptune tones for everything else
+(select/deselect, illegal, win, lose) — see `src/ui/sound.ts`. Music lives
+separately in `src/ui/music.ts`, which crossfades between two `<audio>`
+elements rather than using Web Audio, since the tracks are several minutes
+long and don't need sample-accurate mixing, just a clean handoff.
 
 The engine knows nothing about pixels and the renderer knows nothing about
 rules; `src/ui/app.ts` is the only place they meet. That separation is what

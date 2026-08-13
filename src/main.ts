@@ -1,8 +1,10 @@
 import { AccountPanel } from './ui/account';
 import { App } from './ui/app';
 import { Lobby } from './ui/lobby';
+import { TitleScreen } from './ui/title';
 
 const app = new App();
+new TitleScreen();
 
 app
   .start()

@@ -728,3 +728,90 @@ img, canvas { image-rendering: pixelated; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* --------------------------------------------------------------------- */
+/* Title screen                                                           */
+/* --------------------------------------------------------------------- */
+
+.title-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  background: var(--ink);
+}
+.title-screen[hidden] { display: none; }
+
+.title-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.title-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(8, 9, 14, 0.35) 0%,
+    rgba(8, 9, 14, 0.15) 45%,
+    rgba(8, 9, 14, 0.55) 78%,
+    rgba(8, 9, 14, 0.88) 100%
+  );
+}
+
+.title-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 26px;
+  padding-bottom: 9vh;
+  text-align: center;
+}
+
+.title-logo {
+  margin: 0;
+  font-size: clamp(30px, 8vw, 64px);
+  letter-spacing: 3px;
+  line-height: 1;
+  text-shadow:
+    0 4px 0 var(--edge),
+    0 9px 0 rgba(0, 0, 0, 0.45);
+  animation: title-drift 3.2s ease-in-out infinite;
+}
+@keyframes title-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.title-start-btn {
+  font-size: 13px;
+  padding: 16px 40px;
+  animation: title-pulse 1.6s steps(6) infinite;
+}
+@keyframes title-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.22); }
+}
+
+.title-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 101;
+  background: var(--cream);
+  opacity: 0;
+  pointer-events: none;
+}
+.title-fade[hidden] { display: none; }
+.title-fade-in { opacity: 1; transition: opacity 420ms steps(5); }
+.title-fade-out { opacity: 0; transition: opacity 420ms steps(5); }
+
+@media (max-width: 560px) {
+  .title-logo { font-size: clamp(26px, 12vw, 46px); }
+  .title-start-btn { padding: 14px 30px; }
+}

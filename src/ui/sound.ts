@@ -1,17 +1,31 @@
-/** Procedural chiptune SFX.
+/** Game SFX: a mix of recorded clips and procedural chiptune tones.
  *
- * Everything is synthesised from oscillators and a noise buffer, so the game
- * ships no audio files and the whole kit costs a couple of kilobytes. Volumes
- * are deliberately low: this sits under the action rather than announcing it.
+ * The five effects with a matching recorded asset (move, jump, capture,
+ * crown, and generic UI clicks) play from `public/sfx`. Everything without
+ * one -- select/deselect, illegal, win, lose, tick -- stays synthesised from
+ * oscillators and a noise buffer, so this file still ships most of its kit as
+ * a couple of kilobytes of code rather than audio.
  */
 
 type Wave = OscillatorType;
 
+const CLIPS = {
+  click: 'sfx/click.mp3',
+  move: 'sfx/move.mp3',
+  jump: 'sfx/multijump.mp3',
+  capture: 'sfx/capture.mp3',
+  crown: 'sfx/kingme.mp3',
+} as const;
+
+type ClipKey = keyof typeof CLIPS;
+
+const CLIP_VOLUME = 0.55;
+
 export class Sound {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
-  private noise: AudioBuffer | null = null;
   private enabled = true;
+  private readonly clips = new Map<ClipKey, HTMLAudioElement>();
 
   get muted(): boolean {
     return !this.enabled;
@@ -25,6 +39,15 @@ export class Sound {
   /** Browsers only allow audio after a gesture, so this is called from the
    *  first real interaction rather than at load. */
   unlock(): void {
+    if (this.clips.size === 0) {
+      for (const [key, src] of Object.entries(CLIPS) as [ClipKey, string][]) {
+        const el = new Audio(`${import.meta.env.BASE_URL}${src}`);
+        el.preload = 'auto';
+        el.volume = CLIP_VOLUME;
+        this.clips.set(key, el);
+      }
+    }
+
     if (this.ctx) {
       if (this.ctx.state === 'suspended') void this.ctx.resume();
       return;
@@ -37,11 +60,17 @@ export class Sound {
     this.master = this.ctx.createGain();
     this.master.gain.value = this.enabled ? 0.5 : 0;
     this.master.connect(this.ctx.destination);
+  }
 
-    const frames = Math.floor(this.ctx.sampleRate * 0.4);
-    this.noise = this.ctx.createBuffer(1, frames, this.ctx.sampleRate);
-    const data = this.noise.getChannelData(0);
-    for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
+  /** Fires and forgets a clone of the clip so overlapping hits (a fast chain
+   *  of jumps, say) don't cut each other off. */
+  private clip(key: ClipKey): void {
+    if (!this.enabled) return;
+    const master = this.clips.get(key);
+    if (!master) return;
+    const instance = master.cloneNode(true) as HTMLAudioElement;
+    instance.volume = CLIP_VOLUME;
+    void instance.play().catch(() => {});
   }
 
   private tone(
@@ -73,25 +102,6 @@ export class Sound {
     osc.stop(t + duration + 0.02);
   }
 
-  private hiss(duration: number, gain = 0.1, at = 0, cutoff = 2200): void {
-    const ctx = this.ctx;
-    const master = this.master;
-    if (!ctx || !master || !this.noise || !this.enabled) return;
-    const t = ctx.currentTime + at;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noise;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(cutoff, t);
-    filter.frequency.exponentialRampToValueAtTime(300, t + duration);
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(gain, t);
-    env.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-    src.connect(filter).connect(env).connect(master);
-    src.start(t);
-    src.stop(t + duration + 0.02);
-  }
-
   select(): void {
     this.tone(660, 0.06, { gain: 0.07 });
   }
@@ -105,23 +115,19 @@ export class Sound {
   }
 
   move(): void {
-    this.tone(180, 0.09, { wave: 'triangle', gain: 0.13 });
-    this.hiss(0.06, 0.05, 0, 900);
+    this.clip('move');
   }
 
   jump(): void {
-    this.tone(300, 0.14, { wave: 'triangle', gain: 0.11, slideTo: 520 });
+    this.clip('jump');
   }
 
   capture(): void {
-    this.hiss(0.2, 0.16, 0, 3200);
-    this.tone(220, 0.16, { wave: 'square', gain: 0.1, slideTo: 70 });
+    this.clip('capture');
   }
 
   crown(): void {
-    [523, 659, 784, 1047].forEach((f, i) =>
-      this.tone(f, 0.16, { wave: 'square', gain: 0.09, at: i * 0.06 }),
-    );
+    this.clip('crown');
   }
 
   win(): void {
@@ -137,7 +143,7 @@ export class Sound {
   }
 
   tick(): void {
-    this.tone(880, 0.03, { gain: 0.04 });
+    this.clip('click');
   }
 }
 

@@ -28,6 +28,7 @@ import {
 } from '../engine/types';
 import { BoardView } from '../render/board-view';
 import { SpriteAtlas, spriteKey } from '../render/sprites';
+import { music } from './music';
 import { sound } from './sound';
 
 export interface MatchBinding {
@@ -221,8 +222,10 @@ export class App {
 
     this.dom.btnSound.addEventListener('click', () => {
       sound.unlock();
+      music.unlock();
       const muted = !sound.muted;
       sound.setMuted(muted);
+      music.setMuted(muted);
       this.dom.btnSound.setAttribute('aria-pressed', String(muted));
       this.dom.soundIcon.textContent = muted ? '🔇' : '♪';
       if (!muted) sound.tick();
@@ -325,6 +328,9 @@ export class App {
     this.setHint('');
     this.refresh();
     sound.tick();
+    // Between games, the "selecting game mode" track plays; the first move
+    // played hands off to the gameplay pair, see playMoveSounds().
+    music.enterMenu();
   }
 
   /** True when the local player is allowed to act right now. */
@@ -336,6 +342,7 @@ export class App {
 
   private handleSquare(square: Sq): void {
     sound.unlock();
+    music.unlock();
     if (this.state.status === 'over') return;
 
     // Never drop a click just because something is still animating. Snapping
@@ -410,6 +417,7 @@ export class App {
     this.state = after;
     this.clearSelection();
 
+    if (before.history.length === 0) music.enterGame();
     this.view.animate(before, move, after);
     this.playMoveSounds(before, move, after);
 
@@ -435,6 +443,7 @@ export class App {
     const after = applyMove(before, move);
     this.state = after;
     this.clearSelection();
+    if (before.history.length === 0) music.enterGame();
     this.view.animate(before, move, after);
     this.playMoveSounds(before, move, after);
     this.refresh();
@@ -592,6 +601,8 @@ export class App {
           : 'No legal moves remain.';
     this.dom.overModal.hidden = false;
     window.dispatchEvent(new CustomEvent('cheskers:gameover'));
+    // Back to the pre-game track until a rematch or new game starts.
+    music.enterMenu();
   }
 
   // -------------------------------------------------------------------------

@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "headers": [
     {
-      "source": "/sprites/(.*)",
+      "source": "/(sprites|video|music|sfx)/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
