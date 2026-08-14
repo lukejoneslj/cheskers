@@ -9,7 +9,7 @@
 
 import { rollLoadout } from '../engine/augments';
 import type { Outcome } from '../engine/elo';
-import type { Color, Move, Rules } from '../engine/types';
+import { DEFAULT_RULES, type Color, type Move, type Rules } from '../engine/types';
 import { accounts, cleanName } from '../net/auth';
 import { Room, type RoomSnapshot, type Seat, type WireMove } from '../net/room';
 import { isConfigured } from '../net/firebase';
@@ -192,15 +192,21 @@ export class Lobby implements MatchPeer {
     return name;
   }
 
-  /** The ruleset a newly created room is fixed to. Augments are rolled once,
-   *  here, and stored in the room: there is no synchronised draft protocol,
-   *  so both clients simply read the same loadout and their engines cannot
-   *  disagree about what a move meant. */
+  /** The ruleset a newly created room is fixed to.
+   *
+   * Deliberately built from `DEFAULT_RULES` rather than from whatever the
+   * local game is currently set to. The rule toggles live under "LOCAL GAME
+   * OPTIONS" and there is nothing in the lobby that shows a joiner what the
+   * host picked — inheriting them would let a stray checkbox silently change
+   * the game for someone who never saw it. Online is always the standard
+   * ruleset: no forced jumps.
+   *
+   * Augments are the one exception, and they are rolled here and stored in
+   * the room, so both clients read the same loadout and their engines cannot
+   * disagree about what a move meant. */
   private currentRules(): Rules {
-    const base = this.app.getState().rules;
     return {
-      forcedJumps: base.forcedJumps,
-      lossOnNoMoves: base.lossOnNoMoves,
+      ...DEFAULT_RULES,
       augments: this.dom.mania.checked ? rollLoadout(MANIA_AUGMENTS) : {},
     };
   }
