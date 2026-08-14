@@ -57,6 +57,13 @@ export const AUGMENTS: ReadonlyArray<Augment> = [
     glyph: '♞',
   },
   {
+    id: 'missionary_bishop',
+    name: 'MISSIONARIES',
+    blurb: 'Your bishops may also step one square orthogonally.',
+    rarity: 'common',
+    glyph: '✝',
+  },
+  {
     id: 'relentless',
     name: 'RELENTLESS',
     blurb: 'Crowning no longer ends your jump chain. Keep going.',
@@ -99,6 +106,34 @@ export const AUGMENTS: ReadonlyArray<Augment> = [
     glyph: '✚',
   },
   {
+    id: 'raider_knight',
+    name: 'RAIDERS',
+    blurb: 'Your knights may hop adjacent enemies any direction — and chain.',
+    rarity: 'rare',
+    glyph: '⚔',
+  },
+  {
+    id: 'aegis',
+    name: 'AEGIS',
+    blurb: 'Both your rooks turn aside the first attempt on them. The attacker dies.',
+    rarity: 'rare',
+    glyph: '🛡',
+  },
+  {
+    id: 'phalanx',
+    name: 'PHALANX',
+    blurb: 'Your checkers standing beside another of yours cannot be hopped.',
+    rarity: 'rare',
+    glyph: '⛓',
+  },
+  {
+    id: 'reaping',
+    name: 'REAPING',
+    blurb: 'Every third piece you take raises a fresh man on your home rank.',
+    rarity: 'rare',
+    glyph: '⚱',
+  },
+  {
     id: 'flying_kings',
     name: 'FLYING KINGS',
     blurb: 'Your crowned checkers slide any distance and take from range.',
@@ -139,6 +174,27 @@ export const AUGMENTS: ReadonlyArray<Augment> = [
     blurb: 'One checker is armed. It levels every neighbour when taken, or in six turns.',
     rarity: 'cursed',
     glyph: '💣',
+  },
+  {
+    id: 'gorge',
+    name: 'GORGE',
+    blurb: 'Every kill stacks another spare life onto the piece that made it.',
+    rarity: 'cursed',
+    glyph: '⬆',
+  },
+  {
+    id: 'ironclad',
+    name: 'IRONCLAD',
+    blurb: 'Every chess piece of yours but the King has a spare life.',
+    rarity: 'cursed',
+    glyph: '⛊',
+  },
+  {
+    id: 'martyr',
+    name: 'MARTYRS',
+    blurb: 'Every checker of yours levels its neighbours when it is taken.',
+    rarity: 'cursed',
+    glyph: '✹',
   },
 ];
 

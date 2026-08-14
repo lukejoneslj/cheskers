@@ -937,15 +937,29 @@ select.field {
 }
 .card-augs[hidden] { display: none; }
 .card-aug {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
   line-height: 1;
   padding: 4px 5px;
   background: var(--ink-soft);
   border: 2px solid var(--edge);
   cursor: help;
 }
+.card-aug-glyph { font-size: 11px; line-height: 1; }
+.card-aug-name {
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .card-aug[data-rarity='rare']   { border-color: var(--blue); }
 .card-aug[data-rarity='cursed'] { border-color: var(--red); }
+.card-aug[data-rarity='rare'] .card-aug-name   { color: var(--blue); }
+.card-aug[data-rarity='cursed'] .card-aug-name { color: var(--red); }
 
 .lobby-toggle { margin: 4px 0 2px; }
 
@@ -1150,6 +1164,8 @@ select.field {
   gap: 10px;
   margin-bottom: 16px;
 }
+/* `display: grid` would otherwise win over the hidden attribute. */
+.aug-cards[hidden] { display: none; }
 
 .aug-card {
   font-family: inherit;
@@ -1207,6 +1223,28 @@ select.field {
 }
 .held-chip[data-rarity='rare']   { border-color: var(--blue); }
 .held-chip[data-rarity='cursed'] { border-color: var(--red); }
+.held-label { min-width: 46px; }
+.held-none { font-size: 8px; color: var(--muted); opacity: 0.7; }
+
+/* The opponent's answering pick ------------------------------------------ */
+
+.mania-reply-label {
+  margin: 0 0 10px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+/* One card, centred rather than stretched across the whole draft grid. */
+#mania-reply .aug-cards { grid-template-columns: minmax(150px, 260px); }
+.aug-card:disabled {
+  cursor: default;
+  opacity: 1;          /* it is a reveal, not a dead control */
+}
+.aug-card:disabled:hover {
+  background: var(--ink-soft);
+  transform: none;
+  box-shadow: 0 var(--drop) 0 var(--edge);
+}
 
 /* --------------------------------------------------------------------- */
 /* Horror escalation                                                      */

@@ -79,13 +79,17 @@ names stay hidden until they are reachable.
 ## Cheskers Mania
 
 A run. Before every round you draft one augment from three; the opponent then
-takes one too, so the board gets stranger for both of you at the same rate.
-Win to draft again, lose once and the run is over. The draft is weighted by
-round, so commons dry up and the cursed cards start showing.
+draws one of its own, which the draft screen shows you before the round
+begins. Win to draft again, lose once and the run is over. The draft is
+weighted by round, so commons dry up and the cursed cards start showing.
+
+Both loadouts are also printed on the player cards for the whole game, in
+every mode that has augments — you should never have to work out what your
+opponent is running from a move you did not think was legal.
 
 ## Augments
 
-Seventeen rule modifiers, each implemented inside the engine rather than
+Twenty-five rule modifiers, each implemented inside the engine rather than
 bolted onto the UI — which is what lets the AI play with and against them
 with no special handling at all. They are granted per side, so "your checkers
 may retreat" never accidentally applies to your opponent.
@@ -97,31 +101,46 @@ may retreat" never accidentally applies to your opponent.
 | **EARLY CROWN** | Checkers crown one rank sooner. |
 | **SIEGE ENGINE** | Rooks also step one square diagonally. |
 | **OUTRIDERS** | Knights also step one square in any direction. |
+| **MISSIONARIES** | Bishops also step one square orthogonally. |
 | **RELENTLESS** | Crowning no longer ends a jump chain. |
 | **ZEALOTS** | Bishops hop adjacent enemies like checkers — and chain. |
+| **RAIDERS** | Knights hop adjacent enemies any direction — and chain. |
 | **BLINK** | The king leaps exactly two squares, over anything. |
 | **UNDYING** | The first checker you lose climbs back out on your home rank. |
+| **AEGIS** | Both rooks turn aside the first attempt on them; the attacker dies. |
+| **PHALANX** | Checkers standing beside another of yours cannot be hopped. |
+| **REAPING** | Every third piece you take raises a fresh man on your home rank. |
 | **FLYING KINGS** | Crowned checkers slide any distance and take from range. |
 | **AMAZON** | The queen also moves as a knight. |
 | **ROYAL GUARD** | The king turns aside the first attempt on it; the attacker dies. |
 | **BLOODCROWN** | Any checker that captures is crowned on the spot. |
 | **HEARTSTONE** | Every checker has a spare life; attacks bounce off. |
 | **VETERANCY** | Pieces bank kills: 2 earns a spare life, 3 earns a step any direction. |
+| **GORGE** | Every kill stacks another spare life onto the piece that made it. |
+| **IRONCLAD** | Every chess piece but the king has a spare life. |
 | **ASCENSION** | Each kill promotes the killer: checker → knight → bishop → rook → queen. |
 | **POWDER KEG** | One checker is armed. It levels every neighbour when taken, or in six turns. |
+| **MARTYRS** | Every checker levels its neighbours when it is taken. |
 
-The last four hang state on **individual pieces** rather than the side —
-`lives`, `marks` and `bomb` live on `Piece`, so a particular checker is the
-one carrying the keg and a particular rook is the one that has earned its
-second life. The board draws them as pips above the piece (cyan lives, gold
-kills, orange fuse, blinking in the last two turns), because a mechanic you
-cannot see is a mechanic you cannot plan around.
+Nine of them hang state on **individual pieces** rather than the side —
+`lives`, `marks`, `shield` and `bomb` live on `Piece`, so a particular checker
+is the one carrying the keg and a particular rook is the one that has earned
+its second life. The board draws them as pips above the piece (cyan lives,
+gold kills, orange fuse, blinking in the last two turns), because a mechanic
+you cannot see is a mechanic you cannot plan around.
+
+None of this state ever crosses the wire. Online, the move format stays
+`{from, to, by}` and both clients re-derive every fuse, life and mark by
+replaying the log — which is why the keg starts on a fixed file rather than a
+random square.
 
 `ROYAL GUARD` is the one worth explaining: a shielded king cannot simply be
 declared uncapturable without teaching the move generator a special case, so
 instead the capture *resolves* — and the attacker is destroyed rather than
 taking the square, with the shield breaking on the way. Deterministic, pure,
-and the ward ring under the king makes it legible without a tooltip.
+and the ward ring under the king makes it legible without a tooltip. `AEGIS`
+is the same mechanic pointed at the rooks, and needed no new code beyond
+dropping the "king only" condition.
 
 ### Mania online
 
@@ -160,7 +179,7 @@ else still works.
 |---|---|
 | `npm run dev` | Dev server on :5173 |
 | `npm run build` | Type-check and build to `dist/` |
-| `npm test` | Unit tests — rules, augments, Elo, and the AI search (95) |
+| `npm test` | Unit tests — rules, augments, Elo, and the AI search (108) |
 | `npm run test:rules` | Security-rule tests against the live database (35) † |
 | `npm run sprites` | Re-cut sprites from `assets/` (needs Python + Pillow/NumPy) |
 
@@ -330,7 +349,7 @@ public/sprites/           16 transparent PNGs, one shared pixel grid
 public/video/             Title screen loop, re-encoded with audio stripped
 public/music/             Title, menu, and two alternating gameplay tracks
 public/sfx/               Recorded hit sounds for move/jump/capture/crown/click
-src/engine/               Pure rules + augments + Elo + AI search. No DOM. 95 tests.
+src/engine/               Pure rules + augments + Elo + AI search. No DOM. 108 tests.
 src/render/               Canvas renderer, tweens, particles, palette
 src/net/                  Firebase bootstrap, accounts, room sync
 src/campaign/             Chapter/NPC data and localStorage progress

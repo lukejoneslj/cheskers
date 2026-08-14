@@ -315,8 +315,20 @@
     <div id="mania-draft" hidden>
       <h3 class="mania-round" id="mania-round">ROUND 1</h3>
       <div class="aug-cards" id="mania-cards"></div>
+
+      <!-- Shown after you pick, so the opponent's own roll is something you
+           watch happen rather than something you discover mid-game. -->
+      <div id="mania-reply" hidden>
+        <p class="mania-reply-label" id="mania-reply-label">YOUR OPPONENT ANSWERS</p>
+        <div class="aug-cards" id="mania-reply-card"></div>
+      </div>
+
       <div class="held-row" id="mania-held" hidden></div>
       <div class="held-row" id="mania-held-theirs" hidden></div>
+
+      <button id="mania-go" class="btn btn-primary lobby-btn" type="button" hidden>
+        BEGIN ROUND
+      </button>
     </div>
 
     <div id="mania-over" hidden>

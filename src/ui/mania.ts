@@ -52,6 +52,10 @@ export class Mania {
     draftPane: el('mania-draft'),
     cards: el('mania-cards'),
     round: el('mania-round'),
+    reply: el('mania-reply'),
+    replyLabel: el('mania-reply-label'),
+    replyCard: el('mania-reply-card'),
+    go: el<HTMLButtonElement>('mania-go'),
     held: el('mania-held'),
     heldTheirs: el('mania-held-theirs'),
     start: el<HTMLButtonElement>('mania-start'),
@@ -97,6 +101,11 @@ export class Mania {
     this.dom.quit.addEventListener('click', () => {
       sound.tick();
       this.quit();
+    });
+    this.dom.go.addEventListener('click', () => {
+      sound.tick();
+      this.dom.modal.hidden = true;
+      this.beginMatch();
     });
   }
 
@@ -157,43 +166,64 @@ export class Mania {
     this.dom.intro.hidden = true;
     this.dom.over.hidden = true;
     this.dom.draftPane.hidden = false;
-    this.dom.round.textContent = `ROUND ${this.round}`;
+    this.dom.round.textContent = `ROUND ${this.round} — YOUR PICK`;
 
-    this.renderHeld(this.dom.held, this.mine, 'YOURS');
-    this.renderHeld(this.dom.heldTheirs, this.theirs, 'THEIRS');
+    // Back to the picking half of the draft, in case the last thing on screen
+    // was the previous round's reveal.
+    this.dom.cards.hidden = false;
+    this.dom.reply.hidden = true;
+    this.dom.go.hidden = true;
+
+    this.renderLoadouts();
 
     const cards = this.dom.cards;
     cards.replaceChildren();
     for (const a of this.offered) {
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'aug-card';
-      card.dataset.rarity = a.rarity;
-      card.innerHTML =
-        `<span class="aug-glyph"></span>` +
-        `<span class="aug-name"></span>` +
-        `<span class="aug-blurb"></span>` +
-        `<span class="aug-rarity"></span>`;
-      card.querySelector('.aug-glyph')!.textContent = a.glyph;
-      card.querySelector('.aug-name')!.textContent = a.name;
-      card.querySelector('.aug-blurb')!.textContent = a.blurb;
-      card.querySelector('.aug-rarity')!.textContent = a.rarity.toUpperCase();
+      const card = this.augCard(a);
       card.addEventListener('click', () => this.pick(a));
       cards.appendChild(card);
     }
   }
 
+  private augCard(a: Augment): HTMLButtonElement {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'aug-card';
+    card.dataset.rarity = a.rarity;
+    card.innerHTML =
+      `<span class="aug-glyph"></span>` +
+      `<span class="aug-name"></span>` +
+      `<span class="aug-blurb"></span>` +
+      `<span class="aug-rarity"></span>`;
+    card.querySelector('.aug-glyph')!.textContent = a.glyph;
+    card.querySelector('.aug-name')!.textContent = a.name;
+    card.querySelector('.aug-blurb')!.textContent = a.blurb;
+    card.querySelector('.aug-rarity')!.textContent = a.rarity.toUpperCase();
+    return card;
+  }
+
+  private renderLoadouts(): void {
+    this.renderHeld(this.dom.held, this.mine, 'YOURS');
+    this.renderHeld(this.dom.heldTheirs, this.theirs, 'THEIRS');
+  }
+
+  /** Both loadouts are always on screen during a draft, empty or not: the
+   *  opponent collects augments at exactly the rate you do, and hiding its
+   *  row until it had one made it look like you were the only one rolling. */
   private renderHeld(host: HTMLElement, ids: ReadonlyArray<AugmentId>, label: string): void {
     host.replaceChildren();
-    if (ids.length === 0) {
-      host.hidden = true;
-      return;
-    }
     host.hidden = false;
     const tag = document.createElement('span');
     tag.className = 'held-label';
     tag.textContent = label;
     host.appendChild(tag);
+    if (ids.length === 0) {
+      const none = document.createElement('span');
+      none.className = 'held-none';
+      none.textContent = 'NOTHING YET';
+      host.appendChild(none);
+      return;
+    }
     for (const id of ids) {
       const a = augment(id);
       const chip = document.createElement('span');
@@ -215,8 +245,25 @@ export class Mania {
     const reply = draft(this.theirs, 1, this.round)[0];
     if (reply) this.theirs.push(reply.id);
 
-    this.dom.modal.hidden = true;
-    this.beginMatch();
+    this.showReply(reply ?? null);
+  }
+
+  /** Hold the draft open long enough to show what the opponent took. */
+  private showReply(reply: Augment | null): void {
+    this.dom.round.textContent = `ROUND ${this.round} — THEIR PICK`;
+    this.dom.cards.hidden = true;
+    this.dom.reply.hidden = false;
+    this.dom.go.hidden = false;
+    this.dom.replyLabel.textContent = reply
+      ? 'YOUR OPPONENT ANSWERS WITH'
+      : 'YOUR OPPONENT HAS NOTHING LEFT TO TAKE';
+    this.dom.replyCard.replaceChildren();
+    if (reply) {
+      const card = this.augCard(reply);
+      card.disabled = true;
+      this.dom.replyCard.appendChild(card);
+    }
+    this.renderLoadouts();
   }
 
   private rules(): Rules {

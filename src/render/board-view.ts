@@ -43,7 +43,7 @@ interface Visual {
   /** 0..1 white-out, flashed on the frame a piece is captured. */
   flash: number;
   z: number;
-  /** `royal_guard`: draw the ward ring under this piece. */
+  /** `royal_guard` / `aegis`: draw the ward ring under this piece. */
   shield: boolean;
   /** Spare lives, veteran marks, and fuse left — drawn as pips above the
    *  piece so a glance at the board tells you what each one is carrying. */
@@ -697,8 +697,9 @@ export class BoardView {
     }
   }
 
-  /** The `royal_guard` ward: a pulsing ring of pixels around the king's base,
-   *  so "this one survives the first hit" is legible without a tooltip. */
+  /** The ward carried by `royal_guard`'s king and `aegis`'s rooks: a pulsing
+   *  ring of pixels around the base, so "this one survives the first hit" is
+   *  legible without a tooltip. */
   private drawWard(cx: number, groundY: number, alpha: number): void {
     const { ctx, scale } = this;
     const pulse = 0.55 + 0.35 * Math.sin(this.clock * 4);

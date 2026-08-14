@@ -27,8 +27,10 @@ export interface Piece {
   /** Stable across the whole game so the renderer can animate a piece as it
    *  travels rather than cross-fading two unrelated sprites. */
   id: number;
-  /** Set by the `royal_guard` augment: absorbs one capture, then breaks.
-   *  Optional so every position built without augments stays unchanged. */
+  /** Absorbs one capture, then breaks — and the attacker is destroyed rather
+   *  than taking the square. Granted to the King by `royal_guard` and to both
+   *  rooks by `aegis`. Optional so every position built without augments stays
+   *  unchanged. */
   shield?: boolean;
   /** Spare lives. A capture attempt on a piece with lives left bounces: the
    *  victim survives, spends a life, and the attacker stays where it was. */
@@ -59,16 +61,24 @@ export type AugmentId =
   | 'blink_king'
   | 'amazon_queen'
   | 'outrider_knight'
+  | 'raider_knight'
+  | 'missionary_bishop'
   // Consequences
   | 'royal_guard'
   | 'undying'
   | 'bloodcrown'
   | 'relentless'
+  | 'reaping'
   // Per-piece: things that live on a single piece and change over a game
   | 'heartstone'
   | 'veterancy'
   | 'ascension'
-  | 'powder_keg';
+  | 'powder_keg'
+  | 'aegis'
+  | 'ironclad'
+  | 'gorge'
+  | 'phalanx'
+  | 'martyr';
 
 /** Which augments each side is playing with. */
 export type AugmentSet = Partial<Record<Color, ReadonlyArray<AugmentId>>>;

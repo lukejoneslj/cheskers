@@ -58,6 +58,8 @@ const KEG_FILE = 3;
 /** Marks at which `veterancy` pays out. */
 const VETERAN_LIFE_AT = 2;
 const VETERAN_STEP_AT = 3;
+/** How many captures a side must bank before `reaping` raises a checker. */
+const REAPING_EVERY = 3;
 
 /** `ascension` walks a capturing piece up this ladder, one rung per kill. */
 const ASCENSION_LADDER: Partial<Record<Kind, Kind>> = {
@@ -103,6 +105,27 @@ export function initialState(rules: Rules = DEFAULT_RULES): GameState {
       const kingSq = board.findIndex((p) => p?.kind === 'K' && p.color === color);
       const king = kingSq >= 0 ? board[kingSq] : null;
       if (king) board[kingSq] = { ...king, shield: true };
+    }
+
+    if (hasAugment(rules, color, 'aegis')) {
+      for (let s = 0; s < 64; s++) {
+        const piece = board[s];
+        if (piece?.color === color && piece.kind === 'R') {
+          board[s] = { ...piece, shield: true };
+        }
+      }
+    }
+
+    if (hasAugment(rules, color, 'ironclad')) {
+      for (let s = 0; s < 64; s++) {
+        const piece = board[s];
+        // The King is excluded on purpose: a King that survives being taken
+        // would turn "capture the King wins" into a two-step affair, and that
+        // is `royal_guard`'s job, not this one's.
+        if (piece?.color === color && piece.kind !== 'c' && piece.kind !== 'K') {
+          board[s] = { ...piece, lives: (piece.lives ?? 0) + 1 };
+        }
+      }
     }
 
     if (hasAugment(rules, color, 'heartstone')) {
@@ -269,6 +292,25 @@ function step(
   }
 }
 
+/** `phalanx`: a checker with a friendly checker beside it cannot be hopped.
+ *
+ * Deliberately limited to hops. A phalanx does not make a piece immune — a
+ * bishop can still slide onto it — it only denies the *checkers* attack, which
+ * is what makes standing your men shoulder to shoulder worth doing. */
+function hopProof(board: Board, victimSq: Sq, victim: Piece, rules: Rules): boolean {
+  if (victim.kind !== 'c') return false;
+  if (!hasAugment(rules, victim.color, 'phalanx')) return false;
+  const r0 = row(victimSq);
+  const c0 = col(victimSq);
+  return OMNI.some(([dr, dc]) => {
+    const r = r0 + dr;
+    const c = c0 + dc;
+    if (!onBoard(r, c)) return false;
+    const friend = at(board, sq(r, c));
+    return friend?.color === victim.color && friend.kind === 'c';
+  });
+}
+
 /** Checker-style movement along `dirs`: an empty neighbour is a step, an
  *  adjacent enemy with space beyond is a hop. `stepsToo` is false for pieces
  *  that only *gain* the hop (an augmented bishop still slides as a bishop). */
@@ -305,6 +347,7 @@ function hopMoves(
 
     // Occupied: the only option in this direction is hopping it.
     if (!isEnemy(neighbour, piece.color)) continue;
+    if (hopProof(board, over, neighbour, rules)) continue;
     const jr = row(from) + dr * 2;
     const jc = col(from) + dc * 2;
     if (!onBoard(jr, jc)) continue;
@@ -323,7 +366,13 @@ function hopMoves(
 /** International-draughts "flying king": a crowned checker slides any distance
  *  along a diagonal, and may capture a lone enemy from range, landing on any
  *  empty square beyond it. */
-function flyingKingMoves(board: Board, from: Sq, piece: Piece, out: Move[]): void {
+function flyingKingMoves(
+  board: Board,
+  from: Sq,
+  piece: Piece,
+  out: Move[],
+  rules: Rules,
+): void {
   for (const [dr, dc] of DIAGONAL) {
     let r = row(from) + dr;
     let c = col(from) + dc;
@@ -339,6 +388,8 @@ function flyingKingMoves(board: Board, from: Sq, piece: Piece, out: Move[]): voi
     const blocker = at(board, sq(r, c));
     if (!isEnemy(blocker, piece.color)) continue;
     const victim = sq(r, c);
+    // A flying king's take is still a hop, so a phalanx turns it away too.
+    if (hopProof(board, victim, blocker, rules)) continue;
 
     // Any empty square beyond a lone enemy is a legal landing.
     let lr = r + dr;
@@ -353,7 +404,7 @@ function flyingKingMoves(board: Board, from: Sq, piece: Piece, out: Move[]): voi
 
 function checkerMoves(board: Board, from: Sq, piece: Piece, out: Move[], rules: Rules): void {
   if (piece.kinged && hasAugment(rules, piece.color, 'flying_kings')) {
-    flyingKingMoves(board, from, piece, out);
+    flyingKingMoves(board, from, piece, out, rules);
     return;
   }
 
@@ -390,6 +441,9 @@ export function movesForPiece(
       if (hasAugment(rules, own, 'zealot_bishop')) {
         hopMoves(board, from, piece, DIAGONAL, out, rules, false);
       }
+      if (hasAugment(rules, own, 'missionary_bishop')) {
+        step(board, from, own, ORTHOGONAL, out);
+      }
       break;
     case 'Q':
       slide(board, from, own, OMNI, out);
@@ -398,6 +452,9 @@ export function movesForPiece(
     case 'N':
       step(board, from, own, KNIGHT, out);
       if (hasAugment(rules, own, 'outrider_knight')) step(board, from, own, OMNI, out);
+      if (hasAugment(rules, own, 'raider_knight')) {
+        hopMoves(board, from, piece, OMNI, out, rules, false);
+      }
       break;
     case 'K':
       step(board, from, own, OMNI, out);
@@ -483,14 +540,17 @@ export function applyMove(state: GameState, move: Move): GameState {
   const { rules } = state;
   const capturedPiece = move.captured !== null ? at(board, move.captured) : null;
 
-  // `royal_guard`: a shielded King turns the first attempt on it aside, and
-  // the attacker is destroyed rather than taking the square. The shield goes
-  // with it, so the second attempt lands.
-  if (capturedPiece?.kind === 'K' && capturedPiece.shield && move.captured !== null) {
+  // A shielded piece (`royal_guard`'s King, `aegis`'s rooks) turns the first
+  // attempt on it aside, and the attacker is destroyed rather than taking the
+  // square. The shield goes with it, so the second attempt lands.
+  if (capturedPiece?.shield && move.captured !== null) {
     board[move.captured] = { ...capturedPiece, shield: false };
     board[move.from] = null;
     const guarded: MoveRecord = {
       ...move,
+      // Nothing died and nobody took the square, so the record says so.
+      captured: null,
+      promotes: false,
       kind: mover.kind,
       color: mover.color,
       capturedKind: null,
@@ -549,6 +609,11 @@ export function applyMove(state: GameState, move: Move): GameState {
       moved = { ...moved, lives: (moved.lives ?? 0) + 1 };
     }
 
+    // `gorge`: no threshold, no cap -- every kill just thickens the hide.
+    if (hasAugment(rules, mover.color, 'gorge')) {
+      moved = { ...moved, lives: (moved.lives ?? 0) + 1 };
+    }
+
     // `ascension`: every kill walks the piece one rung up the ladder.
     if (hasAugment(rules, mover.color, 'ascension')) {
       const next = ASCENSION_LADDER[moved.kind];
@@ -559,8 +624,14 @@ export function applyMove(state: GameState, move: Move): GameState {
   board[move.to] = moved;
 
   // Taking an armed piece sets it off where it stood -- which can easily take
-  // the attacker with it.
-  if (capturedPiece?.bomb !== undefined && move.captured !== null) {
+  // the attacker with it. `powder_keg` arms one checker with a fuse; `martyr`
+  // arms every checker a side owns, with no fuse at all, so they only ever go
+  // off in someone else's hands.
+  const victimExplodes =
+    capturedPiece !== null &&
+    (capturedPiece.bomb !== undefined ||
+      (capturedPiece.kind === 'c' && hasAugment(rules, capturedPiece.color, 'martyr')));
+  if (victimExplodes && capturedPiece && move.captured !== null) {
     detonate(board, move.captured);
     const ended = settleAfterBlast(state, board);
     if (ended) {
@@ -615,6 +686,24 @@ export function applyMove(state: GameState, move: Move): GameState {
     if (home !== null) {
       board[home] = { kind: 'c', color: capturedPiece.color, kinged: false, id: nextId++ };
       revives[capturedPiece.color] = (revives[capturedPiece.color] ?? 0) - 1;
+    }
+  }
+
+  // `reaping`: every third kill a side banks raises a fresh man on its home
+  // rank. The count is derived from the move log rather than carried in the
+  // state, so a client that replays a game arrives at the same board.
+  //
+  // Like `undying` above, this cannot fire on a capture that sets off a keg --
+  // that branch has already returned. Progress is not lost, only the payout
+  // for that particular kill.
+  if (move.captured !== null && hasAugment(rules, mover.color, 'reaping')) {
+    const kills =
+      state.history.filter((h) => h.color === mover.color && h.capturedKind !== null).length + 1;
+    if (kills % REAPING_EVERY === 0) {
+      const home = respawnSquare(board, mover.color);
+      if (home !== null) {
+        board[home] = { kind: 'c', color: mover.color, kinged: false, id: nextId++ };
+      }
     }
   }
 

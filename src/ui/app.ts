@@ -613,7 +613,13 @@ export class App {
 
   /** Show a side's augments on its player card. Driven straight off the game
    *  state, so every mode that sets augments -- local Mania, online Mania, a
-   *  campaign chapter -- gets this for free. */
+   *  campaign chapter -- gets this for free, and so you can always read what
+   *  your opponent is playing with rather than having to infer it from a move
+   *  you did not think was legal.
+   *
+   * The name is spelled out rather than left to a hover tooltip: the glyph
+   * alone told you *that* a side had three augments and nothing about what
+   * they did, and on a touch screen there is no hover at all. */
   private renderAugments(color: Color): void {
     const host = el(`aug-${color}`);
     const ids = this.state.rules.augments?.[color] ?? [];
@@ -629,7 +635,14 @@ export class App {
       chip.className = 'card-aug';
       chip.dataset.rarity = a.rarity;
       chip.title = `${a.name} — ${a.blurb}`;
-      chip.textContent = a.glyph;
+
+      const glyph = document.createElement('span');
+      glyph.className = 'card-aug-glyph';
+      glyph.textContent = a.glyph;
+      const name = document.createElement('span');
+      name.className = 'card-aug-name';
+      name.textContent = a.name;
+      chip.append(glyph, name);
       host.appendChild(chip);
     }
   }

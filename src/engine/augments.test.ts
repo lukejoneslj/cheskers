@@ -394,6 +394,164 @@ describe('per-piece augments', () => {
   });
 });
 
+describe('missionary bishop', () => {
+  it('adds an orthogonal step without losing the diagonals', () => {
+    const plain = position({ d4: 'wB' });
+    expect(targets(legalMovesFrom(plain, S('d4')))).not.toContain('d5');
+
+    const s = position({ d4: 'wB' }, { rules: rules(['missionary_bishop']) });
+    const reach = targets(legalMovesFrom(s, S('d4')));
+    for (const square of ['c4', 'd3', 'd5', 'e4']) expect(reach).toContain(square);
+    expect(reach).toContain('h8'); // still a bishop
+  });
+});
+
+describe('raider knight', () => {
+  const layout = { d4: 'wN', d5: 'bc', d7: 'bc', a1: 'wK', h8: 'bK' };
+
+  it('lets a knight hop an adjacent enemy', () => {
+    const plain = position(layout);
+    // A knight cannot touch the square directly in front of it.
+    expect(targets(legalMovesFrom(plain, S('d4')))).not.toContain('d6');
+
+    const s = position(layout, { rules: rules(['raider_knight']) });
+    expect(targets(legalMovesFrom(s, S('d4')))).toContain('d6');
+  });
+
+  it('chains its hops like a checker', () => {
+    const s = position(layout, { rules: rules(['raider_knight']) });
+    const after = applyMove(s, findMove(s, S('d4'), S('d6'))!);
+    expect(at(after.board, 'd5')).toBeNull();
+    // d7 is still hoppable from d6, so the turn stays with the knight.
+    expect(after.turn).toBe('w');
+    expect(after.chain).toBe(S('d6'));
+  });
+});
+
+describe('aegis', () => {
+  it('shields both rooks at the start', () => {
+    const s = initialState(rules(['aegis']));
+    const rooks = s.board.filter((p) => p?.color === 'w' && p.kind === 'R');
+    expect(rooks).toHaveLength(2);
+    expect(rooks.every((p) => p!.shield === true)).toBe(true);
+    expect(s.board.filter((p) => p?.color === 'b' && p.kind === 'R')
+      .every((p) => p!.shield === undefined)).toBe(true);
+  });
+
+  it('destroys the first attacker and then breaks', () => {
+    const s = position({ d4: 'wR', d5: 'bR', a1: 'wK', h8: 'bK' });
+    const board = s.board.slice() as (Piece | null)[];
+    board[S('d5')] = { ...board[S('d5')]!, shield: true };
+    let game: GameState = { ...s, board };
+
+    game = applyMove(game, findMove(game, S('d4'), S('d5'))!);
+    expect(at(game.board, 'd4')).toBeNull();          // attacker destroyed
+    expect(at(game.board, 'd5')?.kind).toBe('R');     // defender held the square
+    expect(at(game.board, 'd5')?.shield).toBe(false); // and spent the shield
+    expect(game.turn).toBe('b');
+    // Nothing died, so the log must not claim a capture.
+    expect(game.history.at(-1)?.capturedKind).toBeNull();
+    expect(game.history.at(-1)?.captured).toBeNull();
+  });
+});
+
+describe('phalanx', () => {
+  // e5 and f5 stand shoulder to shoulder; d4 would like to hop e5 onto f6.
+  const layout = { d4: 'wc', e5: 'bc', f5: 'bc', a1: 'wK', h8: 'bK' };
+
+  it('denies a hop against a supported checker', () => {
+    expect(targets(legalMovesFrom(position(layout), S('d4')))).toContain('f6');
+
+    const s = position(layout, { rules: rules([], ['phalanx']) });
+    expect(targets(legalMovesFrom(s, S('d4')))).not.toContain('f6');
+  });
+
+  it('does nothing for a checker standing alone', () => {
+    const s = position({ d4: 'wc', e5: 'bc', a1: 'wK', h8: 'bK' }, {
+      rules: rules([], ['phalanx']),
+    });
+    expect(targets(legalMovesFrom(s, S('d4')))).toContain('f6');
+  });
+
+  it('only turns aside hops, not ordinary captures', () => {
+    const s = position({ b2: 'wB', e5: 'bc', f5: 'bc', a1: 'wK', h8: 'bK' }, {
+      rules: rules([], ['phalanx']),
+    });
+    expect(targets(legalMovesFrom(s, S('b2')))).toContain('e5');
+  });
+});
+
+describe('reaping', () => {
+  it('raises a man on the home rank every third kill', () => {
+    let s = position(
+      { d4: 'wR', d5: 'bc', d6: 'bc', d7: 'bc', a1: 'wK', h8: 'bK' },
+      { rules: rules(['reaping']) },
+    );
+    const men = (g: GameState) =>
+      g.board.filter((p) => p?.color === 'w' && p.kind === 'c').length;
+
+    s = applyMove(s, findMove(s, S('d4'), S('d5'))!);
+    expect(men(s)).toBe(0);
+    s = applyMove({ ...s, turn: 'w' }, findMove({ ...s, turn: 'w' }, S('d5'), S('d6'))!);
+    expect(men(s)).toBe(0);
+    s = applyMove({ ...s, turn: 'w' }, findMove({ ...s, turn: 'w' }, S('d6'), S('d7'))!);
+    expect(men(s)).toBe(1);
+    expect(at(s.board, 'a2')?.kind).toBe('c');
+    expect(at(s.board, 'a2')?.color).toBe('w');
+  });
+});
+
+describe('gorge', () => {
+  it('stacks a spare life onto the piece for every kill', () => {
+    let s = position(
+      { d4: 'wR', d5: 'bc', d6: 'bc', a1: 'wK', h8: 'bK' },
+      { rules: rules(['gorge']) },
+    );
+    s = applyMove(s, findMove(s, S('d4'), S('d5'))!);
+    expect(at(s.board, 'd5')?.lives).toBe(1);
+    s = applyMove({ ...s, turn: 'w' }, findMove({ ...s, turn: 'w' }, S('d5'), S('d6'))!);
+    expect(at(s.board, 'd6')?.lives).toBe(2);
+  });
+});
+
+describe('ironclad', () => {
+  it('gives every chess piece but the king a spare life', () => {
+    const s = initialState(rules(['ironclad']));
+    const white = s.board.filter((p) => p?.color === 'w');
+    for (const piece of white) {
+      if (piece!.kind === 'c' || piece!.kind === 'K') {
+        expect(piece!.lives).toBeUndefined();
+      } else {
+        expect(piece!.lives).toBe(1);
+      }
+    }
+    expect(s.board.filter((p) => p?.color === 'b').every((p) => p!.lives === undefined))
+      .toBe(true);
+  });
+});
+
+describe('martyr', () => {
+  const layout = { d4: 'wc', e5: 'bc', d6: 'bN', f4: 'bR', a1: 'wK', h8: 'bK' };
+
+  it('levels the neighbourhood when one of its checkers is taken', () => {
+    const s = position(layout, { rules: rules([], ['martyr']) });
+    const after = applyMove(s, findMove(s, S('d4'), S('f6'))!);
+    expect(at(after.board, 'e5')).toBeNull(); // the martyr
+    expect(at(after.board, 'd6')).toBeNull(); // its own knight
+    expect(at(after.board, 'f4')).toBeNull(); // its own rook
+    expect(at(after.board, 'f6')).toBeNull(); // the attacker that landed beside it
+    expect(at(after.board, 'a1')?.kind).toBe('K');
+    expect(at(after.board, 'h8')?.kind).toBe('K');
+  });
+
+  it('does not arm the other side checkers', () => {
+    const s = position(layout, { rules: rules(['martyr']) });
+    const after = applyMove(s, findMove(s, S('d4'), S('f6'))!);
+    expect(at(after.board, 'f6')?.kind).toBe('c'); // ordinary hop, no blast
+    expect(at(after.board, 'd6')?.kind).toBe('N');
+  });
+});
+
 describe('augments are per side', () => {
   it('does not grant one side the other side augments', () => {
     const s = position({ d4: 'wc', d5: 'bc' }, { rules: rules(['backpedal']) });
