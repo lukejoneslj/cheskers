@@ -633,6 +633,16 @@ img, canvas { image-rendering: pixelated; }
   text-align: center;
 }
 
+select.field {
+  appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--cream) 50%),
+    linear-gradient(135deg, var(--cream) 50%, transparent 50%);
+  background-position: calc(100% - 18px) center, calc(100% - 13px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
 .lobby-btn { width: 100%; margin-top: 14px; }
 
 .lobby-join {

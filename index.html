@@ -93,6 +93,7 @@
       <section class="panel">
         <div class="button-stack">
           <button id="btn-new" class="btn btn-primary" type="button">NEW GAME</button>
+          <button id="btn-ai" class="btn btn-accent" type="button">PLAY VS AI</button>
           <button id="btn-online" class="btn btn-accent" type="button">PLAY ONLINE</button>
           <button id="btn-flip" class="btn" type="button">FLIP BOARD</button>
           <button id="btn-resign" class="btn btn-danger" type="button">RESIGN</button>
@@ -185,6 +186,34 @@
 
     <div class="modal-actions">
       <button id="account-close" class="btn" type="button">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Play vs AI --------------------------------------------------------- -->
+<div class="modal-backdrop" id="ai-modal" hidden>
+  <div class="modal">
+    <h2 class="modal-title">PLAY VS AI</h2>
+
+    <label class="field-label" for="ai-color">YOUR COLOUR</label>
+    <select id="ai-color" class="field">
+      <option value="w">White</option>
+      <option value="b">Black</option>
+      <option value="random" selected>Random</option>
+    </select>
+
+    <label class="field-label" for="ai-difficulty">DIFFICULTY</label>
+    <select id="ai-difficulty" class="field field-spaced">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+
+    <button id="ai-start" class="btn btn-primary lobby-btn" type="button">START MATCH</button>
+
+    <div class="modal-actions">
+      <button id="ai-close" class="btn" type="button">CLOSE</button>
+      <button id="ai-leave" class="btn btn-danger" type="button" hidden>LEAVE MATCH</button>
     </div>
   </div>
 </div>

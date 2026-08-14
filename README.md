@@ -7,8 +7,9 @@ of it stands a rank of checkers instead of pawns. There is no check and no
 checkmate — **capture the enemy King and you win**, so you have to guard yours
 yourself.
 
-Pixel art, hand-tuned animation, hotseat and online play. Built as a static
-site: Vite + TypeScript, no framework, no backend of its own.
+Pixel art, hand-tuned animation, hotseat play, an AI opponent, and online
+play. Built as a static site: Vite + TypeScript, no framework, no backend of
+its own.
 
 A cinematic title screen opens the game, with a looping video backdrop and its
 own soundtrack; a white-flash transition hands off to the board. From there,
@@ -35,6 +36,25 @@ sprite is extracted from the sheet and available at
 
 ---
 
+## Playing against the AI
+
+**PLAY VS AI** opens a colour and difficulty picker, then plays exactly like
+an online match — the AI is wired up through the same `MatchBinding` seam as
+a network opponent, and its moves land through the same `applyRemoteMove`
+path, so it can't see or play anything the rules engine wouldn't also accept
+from a human.
+
+It's a negamax search with alpha-beta pruning (`src/engine/ai.ts`) over the
+same `legalMoves`/`applyMove` the UI uses, run in a Web Worker
+(`src/engine/ai.worker.ts`) so a multi-second `hard` search never freezes the
+board's animation. Iterative deepening means it always has an answer ready:
+it keeps searching one ply deeper until its time budget runs out, then plays
+the best move from the last depth it fully finished. Easy difficulty adds a
+chance of playing a plain random legal move instead, which reads as
+"beatable" far better than just searching shallower does.
+
+---
+
 ## Running it
 
 ```bash
@@ -50,7 +70,7 @@ else still works.
 |---|---|
 | `npm run dev` | Dev server on :5173 |
 | `npm run build` | Type-check and build to `dist/` |
-| `npm test` | Unit tests — rules engine and Elo (55) |
+| `npm test` | Unit tests — rules engine, Elo, and the AI search (63) |
 | `npm run test:rules` | Security-rule tests against the live database (35) † |
 | `npm run sprites` | Re-cut sprites from `assets/` (needs Python + Pillow/NumPy) |
 
@@ -220,10 +240,10 @@ public/sprites/           16 transparent PNGs, one shared pixel grid
 public/video/             Title screen loop, re-encoded with audio stripped
 public/music/             Title, menu, and two alternating gameplay tracks
 public/sfx/               Recorded hit sounds for move/jump/capture/crown/click
-src/engine/               Pure rules + Elo. No DOM. 55 unit tests.
+src/engine/               Pure rules + Elo + AI search. No DOM. 63 unit tests.
 src/render/               Canvas renderer, tweens, particles, palette
 src/net/                  Firebase bootstrap, accounts, room sync
-src/ui/                   App controller, lobby, profile, title screen, sound + music
+src/ui/                   App controller, lobby, AI match, profile, title screen, sound + music
 database.rules.json       Realtime Database security rules
 ```
 

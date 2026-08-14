@@ -13,6 +13,7 @@ import { accounts, cleanName } from '../net/auth';
 import { Room, type RoomSnapshot, type Seat, type WireMove } from '../net/room';
 import { isConfigured } from '../net/firebase';
 import type { App } from './app';
+import type { MatchPeer } from './match-peer';
 import { sound } from './sound';
 
 const el = <T extends HTMLElement>(id: string): T => {
@@ -21,8 +22,9 @@ const el = <T extends HTMLElement>(id: string): T => {
   return node as T;
 };
 
-export class Lobby {
+export class Lobby implements MatchPeer {
   private readonly room: Room;
+  private peer: MatchPeer | null = null;
   private seat: Seat = 'spectator';
   private generation = -1;
   private joined = false;
@@ -59,6 +61,12 @@ export class Lobby {
       onRejected: (move, reason) => this.onRejected(move, reason),
     });
     this.bind();
+  }
+
+  /** The AI opponent takes the same board binding this does; each has to
+   *  yield it before starting its own match. */
+  setPeer(peer: MatchPeer): void {
+    this.peer = peer;
   }
 
   // -------------------------------------------------------------------------
@@ -101,6 +109,7 @@ export class Lobby {
     });
 
     this.dom.create.addEventListener('click', () => {
+      this.peer?.leave();
       void this.guard(this.dom.create, async () => {
         const code = await this.room.create(this.currentRules(), this.playerName());
         this.seat = 'w';
@@ -115,6 +124,7 @@ export class Lobby {
         this.showError('Enter the four-character room code');
         return;
       }
+      this.peer?.leave();
       void this.guard(this.dom.join, async () => {
         this.seat = await this.room.join(code, this.playerName());
         this.joined = true;
@@ -208,7 +218,7 @@ export class Lobby {
     this.dom.roomCode.textContent = code;
   }
 
-  private leave(): void {
+  leave(): void {
     this.room.leave();
     this.joined = false;
     this.seat = 'spectator';

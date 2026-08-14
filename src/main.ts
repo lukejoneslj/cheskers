@@ -1,4 +1,5 @@
 import { AccountPanel } from './ui/account';
+import { AiMatch } from './ui/ai-match';
 import { App } from './ui/app';
 import { Lobby } from './ui/lobby';
 import { TitleScreen } from './ui/title';
@@ -12,7 +13,12 @@ app
     // The lobby is constructed after the board is live so that a deep link
     // (/?room=ABCD) has a working game to attach to.
     new AccountPanel();
-    new Lobby(app);
+    const lobby = new Lobby(app);
+    const aiMatch = new AiMatch(app);
+    // Online play and the AI both take exclusive ownership of the board;
+    // each yields to the other before starting its own match.
+    lobby.setPeer(aiMatch);
+    aiMatch.setPeer(lobby);
   })
   .catch((error: unknown) => {
     console.error(error);
