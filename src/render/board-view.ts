@@ -43,6 +43,8 @@ interface Visual {
   /** 0..1 white-out, flashed on the frame a piece is captured. */
   flash: number;
   z: number;
+  /** `royal_guard`: draw the ward ring under this piece. */
+  shield: boolean;
 }
 
 export interface BoardCallbacks {
@@ -214,6 +216,7 @@ export class BoardView {
       lift: 0,
       flash: 0,
       z: 0,
+      shield: piece.shield === true,
     };
   }
 
@@ -408,6 +411,7 @@ export class BoardView {
       }
       existing.sq = square;
       existing.key = spriteKey(piece);
+      existing.shield = piece.shield === true;
       const p = this.centre(square);
       existing.x = p.x;
       existing.y = p.y;
@@ -605,6 +609,9 @@ export class BoardView {
     const anchorY = visual.y + SQUARE_UNITS / 2 - BASE_PAD - lift;
 
     this.drawShadow(anchorX, visual.y + SQUARE_UNITS / 2 - BASE_PAD, lift, visual.alpha);
+    if (visual.shield) {
+      this.drawWard(anchorX, visual.y + SQUARE_UNITS / 2 - BASE_PAD, visual.alpha);
+    }
 
     ctx.save();
     ctx.globalAlpha = visual.alpha;
@@ -624,6 +631,26 @@ export class BoardView {
       ctx.fillRect(Math.round(-w / 2), -h, w, h);
     }
     ctx.restore();
+  }
+
+  /** The `royal_guard` ward: a pulsing ring of pixels around the king's base,
+   *  so "this one survives the first hit" is legible without a tooltip. */
+  private drawWard(cx: number, groundY: number, alpha: number): void {
+    const { ctx, scale } = this;
+    const pulse = 0.55 + 0.35 * Math.sin(this.clock * 4);
+    const rx = 9;
+    const ry = 3;
+    ctx.fillStyle = `rgba(255, 201, 60, ${(pulse * alpha).toFixed(3)})`;
+    // Eight points around the ellipse, snapped to the art grid.
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.fillRect(
+        Math.round((cx + Math.cos(a) * rx) * scale),
+        Math.round((groundY + Math.sin(a) * ry) * scale),
+        scale,
+        scale,
+      );
+    }
   }
 
   /** Grounding shadow, rasterised on the art grid rather than drawn as a

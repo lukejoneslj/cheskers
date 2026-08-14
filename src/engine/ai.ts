@@ -13,7 +13,7 @@
  */
 
 import { at, legalMoves, movesForPiece, applyMove } from './rules';
-import type { Board, Color, GameState, Kind, Move } from './types';
+import type { Board, Color, GameState, Kind, Move, Rules } from './types';
 
 export interface Difficulty {
   readonly label: string;
@@ -86,7 +86,7 @@ function evalWhite(state: GameState): number {
   }
 
   for (const color of ['w', 'b'] as Color[]) {
-    if (isKingHanging(board, color)) score += color === 'w' ? -260 : 260;
+    if (isKingHanging(board, color, state.rules)) score += color === 'w' ? -260 : 260;
   }
 
   return score;
@@ -96,11 +96,14 @@ function evalWhite(state: GameState): number {
  *  King -- i.e. the King would fall next move if nothing is done about it.
  *  Reuses the same move generator the UI highlights with, so "attacked" here
  *  means exactly what it would mean if the enemy actually played it. */
-function isKingHanging(board: Board, color: Color): boolean {
+function isKingHanging(board: Board, color: Color, rules: Rules): boolean {
   let kingSq = -1;
   for (let s = 0; s < 64; s++) {
     const p = at(board, s);
     if (p && p.kind === 'K' && p.color === color) {
+      // A shielded King shrugs off the first attempt, so being attacked is
+      // not yet a threat worth panicking about.
+      if (p.shield) return false;
       kingSq = s;
       break;
     }
@@ -111,7 +114,7 @@ function isKingHanging(board: Board, color: Color): boolean {
   for (let s = 0; s < 64; s++) {
     const p = at(board, s);
     if (p?.color !== enemy) continue;
-    if (movesForPiece(board, s).some((m) => m.to === kingSq)) return true;
+    if (movesForPiece(board, s, rules).some((m) => m.to === kingSq)) return true;
   }
   return false;
 }

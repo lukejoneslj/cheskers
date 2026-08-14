@@ -3,9 +3,12 @@
  * The hues are pulled from the sprite sheets themselves — the deep navy of the
  * piece outlines and the steel blue of the dark army — so the board, the panels
  * and the pieces read as a single set rather than art dropped onto a UI.
+ *
+ * The renderer reads `palette` fresh on every frame, so mutating it (see
+ * `src/ui/horror.ts`) re-tints the board live with no other plumbing.
  */
 
-export const palette = {
+export const BASE_PALETTE = {
   ink: '#10121a',
   inkSoft: '#1a1e2c',
   panel: '#232840',
@@ -25,7 +28,13 @@ export const palette = {
   gold: '#ffc93c',
   green: '#3ddc84',
   blue: '#4f9bff',
-} as const;
+};
+
+export type Palette = typeof BASE_PALETTE;
+
+/** The live palette. Mutable on purpose — never re-import or copy this if you
+ *  want the board to keep following theme changes. */
+export const palette: Palette = { ...BASE_PALETTE };
 
 /** Board-surface tints, kept semi-transparent so the wood grain shows through. */
 export const overlay = {
@@ -37,3 +46,46 @@ export const overlay = {
   captureRing: '#ff4d5f',
   chain: '#4f9bff',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Colour maths, used by the horror escalation
+// ---------------------------------------------------------------------------
+
+export interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
+
+export function hexToRgb(hex: string): Rgb {
+  const n = parseInt(hex.slice(1), 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+export function rgbToHex({ r, g, b }: Rgb): string {
+  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  return `#${((1 << 24) | (clamp(r) << 16) | (clamp(g) << 8) | clamp(b))
+    .toString(16)
+    .slice(1)}`;
+}
+
+export function mixHex(from: string, to: string, t: number): string {
+  const a = hexToRgb(from);
+  const b = hexToRgb(to);
+  return rgbToHex({
+    r: a.r + (b.r - a.r) * t,
+    g: a.g + (b.g - a.g) * t,
+    b: a.b + (b.b - a.b) * t,
+  });
+}
+
+/** Push a colour toward its own grey, `amount` of the way. */
+export function desaturate(hex: string, amount: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  const grey = 0.299 * r + 0.587 * g + 0.114 * b;
+  return rgbToHex({
+    r: r + (grey - r) * amount,
+    g: g + (grey - g) * amount,
+    b: b + (grey - b) * amount,
+  });
+}

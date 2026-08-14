@@ -232,7 +232,10 @@ export class App {
     });
 
     const applyRules = () => {
+      // Spread the current ruleset rather than rebuilding it: augments are
+      // part of `rules` too, and a checkbox must not quietly discard them.
       this.rules = {
+        ...this.rules,
         forcedJumps: this.dom.optForced.checked,
         lossOnNoMoves: this.dom.optStuck.checked,
       };
@@ -314,6 +317,12 @@ export class App {
 
   getState(): GameState {
     return this.state;
+  }
+
+  /** Persistent status line under the board, used by the game modes to say
+   *  which run or chapter is in progress. */
+  showHint(text: string): void {
+    this.setHint(text);
   }
 
   // -------------------------------------------------------------------------

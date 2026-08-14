@@ -7,9 +7,9 @@ of it stands a rank of checkers instead of pawns. There is no check and no
 checkmate — **capture the enemy King and you win**, so you have to guard yours
 yourself.
 
-Pixel art, hand-tuned animation, hotseat play, an AI opponent, and online
-play. Built as a static site: Vite + TypeScript, no framework, no backend of
-its own.
+Pixel art, hand-tuned animation, hotseat play, an AI opponent, a story
+campaign, a roguelike augment mode, and online play. Built as a static site:
+Vite + TypeScript, no framework, no backend of its own.
 
 A cinematic title screen opens the game, with a looping video backdrop and its
 own soundtrack; a white-flash transition hands off to the board. From there,
@@ -55,6 +55,67 @@ chance of playing a plain random legal move instead, which reads as
 
 ---
 
+## The Long Game (campaign)
+
+Eight opponents, played in order, each unlocked by beating the one before.
+They are the same search engine throughout — what changes is what each one is
+allowed to do, and what they say while doing it.
+
+The horror is deliberately gradual. One number per chapter (`horror`, 0–7)
+drives everything at once: the board palette is interpolated toward bone and
+old meat, the CSS variables follow so the frame rots at the same rate as the
+board, a vignette tightens, the room starts breathing at level 5, the title
+stops being reliable at 6 — and the music is *detuned* rather than swapped,
+because the same track going slightly wrong is worse than a different track.
+See `src/ui/horror.ts`; the palette is mutable and read fresh every frame, so
+re-tinting the canvas needs no other plumbing.
+
+Progress lives in `localStorage` (`src/campaign/progress.ts`) — single-player,
+plays fine signed out, and not worth a round trip or a security rule. Chapter
+names stay hidden until they are reachable.
+
+## Cheskers Mania
+
+A run. Before every round you draft one augment from three; the opponent then
+takes one too, so the board gets stranger for both of you at the same rate.
+Win to draft again, lose once and the run is over. The draft is weighted by
+round, so commons dry up and the cursed cards start showing.
+
+## Augments
+
+Thirteen rule modifiers, each implemented inside the engine rather than
+bolted onto the UI — which is what lets the AI play with and against them
+with no special handling at all. They are granted per side, so "your checkers
+may retreat" never accidentally applies to your opponent.
+
+| | |
+|---|---|
+| **BACKPEDAL** | Checkers move and hop backwards, crowned or not. |
+| **FLANK** | Checkers also step and hop sideways. |
+| **EARLY CROWN** | Checkers crown one rank sooner. |
+| **SIEGE ENGINE** | Rooks also step one square diagonally. |
+| **OUTRIDERS** | Knights also step one square in any direction. |
+| **RELENTLESS** | Crowning no longer ends a jump chain. |
+| **ZEALOTS** | Bishops hop adjacent enemies like checkers — and chain. |
+| **BLINK** | The king leaps exactly two squares, over anything. |
+| **UNDYING** | The first checker you lose climbs back out on your home rank. |
+| **FLYING KINGS** | Crowned checkers slide any distance and take from range. |
+| **AMAZON** | The queen also moves as a knight. |
+| **ROYAL GUARD** | The king turns aside the first attempt on it; the attacker dies. |
+| **BLOODCROWN** | Any checker that captures is crowned on the spot. |
+
+`ROYAL GUARD` is the one worth explaining: a shielded king cannot simply be
+declared uncapturable without teaching the move generator a special case, so
+instead the capture *resolves* — and the attacker is destroyed rather than
+taking the square, with the shield breaking on the way. Deterministic, pure,
+and the ward ring under the king makes it legible without a tooltip.
+
+Both modes are local-only by design. Online rooms still negotiate a classic
+ruleset, so an augmented board never reaches a peer that might disagree about
+what a move meant.
+
+---
+
 ## Running it
 
 ```bash
@@ -70,7 +131,7 @@ else still works.
 |---|---|
 | `npm run dev` | Dev server on :5173 |
 | `npm run build` | Type-check and build to `dist/` |
-| `npm test` | Unit tests — rules engine, Elo, and the AI search (63) |
+| `npm test` | Unit tests — rules, augments, Elo, and the AI search (83) |
 | `npm run test:rules` | Security-rule tests against the live database (35) † |
 | `npm run sprites` | Re-cut sprites from `assets/` (needs Python + Pillow/NumPy) |
 
@@ -240,10 +301,11 @@ public/sprites/           16 transparent PNGs, one shared pixel grid
 public/video/             Title screen loop, re-encoded with audio stripped
 public/music/             Title, menu, and two alternating gameplay tracks
 public/sfx/               Recorded hit sounds for move/jump/capture/crown/click
-src/engine/               Pure rules + Elo + AI search. No DOM. 63 unit tests.
+src/engine/               Pure rules + augments + Elo + AI search. No DOM. 83 tests.
 src/render/               Canvas renderer, tweens, particles, palette
 src/net/                  Firebase bootstrap, accounts, room sync
-src/ui/                   App controller, lobby, AI match, profile, title screen, sound + music
+src/campaign/             Chapter/NPC data and localStorage progress
+src/ui/                   App controller, lobby, AI match, campaign, mania, horror, sound
 database.rules.json       Realtime Database security rules
 ```
 

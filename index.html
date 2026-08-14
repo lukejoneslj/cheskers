@@ -93,6 +93,8 @@
       <section class="panel">
         <div class="button-stack">
           <button id="btn-new" class="btn btn-primary" type="button">NEW GAME</button>
+          <button id="btn-campaign" class="btn btn-story" type="button">THE LONG GAME</button>
+          <button id="btn-mania" class="btn btn-mania" type="button">CHESKERS MANIA</button>
           <button id="btn-ai" class="btn btn-accent" type="button">PLAY VS AI</button>
           <button id="btn-online" class="btn btn-accent" type="button">PLAY ONLINE</button>
           <button id="btn-flip" class="btn" type="button">FLIP BOARD</button>
@@ -186,6 +188,83 @@
 
     <div class="modal-actions">
       <button id="account-close" class="btn" type="button">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Campaign: chapter select ------------------------------------------ -->
+<div class="modal-backdrop" id="campaign-modal" hidden>
+  <div class="modal modal-wide">
+    <h2 class="modal-title">THE LONG GAME</h2>
+    <p class="modal-body campaign-blurb">
+      Eight opponents. Each one plays by rules a little further from the ones
+      you were taught. Beat one to be let through to the next.
+    </p>
+    <ol class="campaign-list" id="campaign-list"></ol>
+    <div class="modal-actions">
+      <button id="campaign-close" class="btn" type="button">CLOSE</button>
+      <button id="campaign-quit" class="btn btn-danger" type="button" hidden>LEAVE</button>
+      <button id="campaign-reset" class="btn" type="button">RESET</button>
+    </div>
+  </div>
+</div>
+
+<!-- Campaign: dialogue scene ------------------------------------------ -->
+<div class="scene" id="scene" hidden>
+  <div class="scene-box">
+    <div class="scene-head">
+      <span class="scene-glyph" id="scene-glyph">☕</span>
+      <span class="scene-who">
+        <span class="scene-name" id="scene-name">MARGO PELL</span>
+        <span class="scene-title" id="scene-title">The greeter</span>
+      </span>
+    </div>
+    <p class="scene-line" id="scene-line"></p>
+    <div class="scene-augments" id="scene-augments" hidden></div>
+    <button id="scene-next" class="btn btn-primary scene-next" type="button">NEXT</button>
+  </div>
+</div>
+
+<!-- Campaign: in-game taunt ------------------------------------------- -->
+<div class="taunt" id="taunt" hidden>
+  <span class="taunt-who"></span>
+  <span class="taunt-line"></span>
+</div>
+
+<!-- Cheskers Mania ----------------------------------------------------- -->
+<div class="modal-backdrop" id="mania-modal" hidden>
+  <div class="modal modal-wide">
+    <h2 class="modal-title">CHESKERS MANIA</h2>
+
+    <div id="mania-intro">
+      <p class="modal-body">
+        Every round you draft one rule change from three — then your opponent
+        takes one too. Win to draft again. Lose once and the run ends.
+      </p>
+      <p class="modal-body mania-best" id="mania-best">BEST RUN: 0 ROUNDS</p>
+      <button id="mania-start" class="btn btn-primary lobby-btn" type="button">
+        START RUN
+      </button>
+    </div>
+
+    <div id="mania-draft" hidden>
+      <h3 class="mania-round" id="mania-round">ROUND 1</h3>
+      <div class="aug-cards" id="mania-cards"></div>
+      <div class="held-row" id="mania-held" hidden></div>
+      <div class="held-row" id="mania-held-theirs" hidden></div>
+    </div>
+
+    <div id="mania-over" hidden>
+      <h3 class="mania-round" id="mania-over-title">RUN OVER</h3>
+      <p class="modal-body" id="mania-over-body"></p>
+      <button id="mania-start-again" class="btn btn-primary lobby-btn" type="button" hidden>
+        RUN AGAIN
+      </button>
+    </div>
+
+    <div class="modal-actions">
+      <button id="mania-close" class="btn" type="button">CLOSE</button>
+      <button id="mania-quit" class="btn btn-danger" type="button" hidden>END RUN</button>
     </div>
   </div>
 </div>

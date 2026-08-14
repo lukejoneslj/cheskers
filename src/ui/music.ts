@@ -34,12 +34,35 @@ export class Music {
   private generation = 0;
   private fadeRaf = 0;
   private blocked: HTMLAudioElement | null = null;
+  private detune = 1;
 
   constructor() {
     for (const el of [this.a, this.b]) {
       el.preload = 'auto';
       el.volume = 0;
     }
+  }
+
+  /** Play everything at `rate` times its natural speed, pitch included -- the
+   *  campaign drops this slightly below 1 as the horror level climbs, so the
+   *  soundtrack sags without ever changing track. */
+  setDetune(rate: number): void {
+    this.detune = Math.max(0.5, Math.min(1.5, rate));
+    for (const el of [this.a, this.b]) this.applyRate(el);
+  }
+
+  private applyRate(el: HTMLAudioElement): void {
+    // Without this the browser time-stretches to hold pitch constant, and the
+    // detune is inaudible.
+    const any = el as HTMLAudioElement & {
+      preservesPitch?: boolean;
+      mozPreservesPitch?: boolean;
+      webkitPreservesPitch?: boolean;
+    };
+    any.preservesPitch = false;
+    any.mozPreservesPitch = false;
+    any.webkitPreservesPitch = false;
+    el.playbackRate = this.detune;
   }
 
   get muted(): boolean {
@@ -105,6 +128,7 @@ export class Music {
     incoming.currentTime = 0;
     incoming.volume = 0;
     incoming.onended = null;
+    this.applyRate(incoming);
 
     if (!incoming.loop) this.armGameplayHandoff(incoming, key, gen);
 

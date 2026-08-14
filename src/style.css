@@ -825,3 +825,337 @@ select.field {
   .title-logo { font-size: clamp(26px, 12vw, 46px); }
   .title-start-btn { padding: 14px 30px; }
 }
+
+/* --------------------------------------------------------------------- */
+/* Game mode buttons                                                      */
+/* --------------------------------------------------------------------- */
+
+.btn-story { background: #6b4a86; color: var(--cream); }
+.btn-mania { background: #d9663f; color: var(--ink); }
+
+/* --------------------------------------------------------------------- */
+/* Campaign — chapter select                                              */
+/* --------------------------------------------------------------------- */
+
+.campaign-blurb { margin-bottom: 14px; }
+
+.campaign-list {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.chapter-btn {
+  font-family: inherit;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px 30px 1fr 20px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  text-align: left;
+  color: var(--cream);
+  background: var(--ink-soft);
+  border: var(--bd) solid var(--edge);
+  cursor: pointer;
+  transition: transform 60ms steps(2), background 120ms steps(2);
+}
+.chapter-btn:hover:not(:disabled) {
+  background: var(--panel-hi);
+  transform: translateX(3px);
+}
+.chapter-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.chapter-numeral {
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+.chapter-glyph { font-size: 18px; text-align: center; }
+.chapter-body { display: grid; gap: 4px; min-width: 0; }
+.chapter-name {
+  font-size: 10px;
+  letter-spacing: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chapter-title { font-size: 8px; color: var(--muted); }
+.chapter-mark { font-size: 12px; color: var(--green); text-align: center; }
+
+.chapter[data-state='done'] .chapter-btn { border-color: var(--green); }
+.chapter[data-state='open'] .chapter-btn { border-color: var(--gold); }
+
+/* --------------------------------------------------------------------- */
+/* Campaign — dialogue scene                                              */
+/* --------------------------------------------------------------------- */
+
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(6, 5, 8, 0.86);
+  animation: fade-in 200ms steps(3);
+  cursor: pointer;
+}
+.scene[hidden] { display: none; }
+
+.scene-box {
+  width: min(620px, 100%);
+  background: var(--panel);
+  border: var(--bd) solid var(--edge);
+  box-shadow: 0 8px 0 var(--edge), 0 8px 0 8px rgba(0, 0, 0, 0.35);
+  padding: 20px;
+  cursor: auto;
+}
+
+.scene-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--edge);
+}
+.scene-glyph {
+  font-size: 26px;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: var(--ink-soft);
+  border: var(--bd) solid var(--edge);
+}
+.scene-who { display: grid; gap: 5px; }
+.scene-name { font-size: 12px; letter-spacing: 1px; color: var(--gold); }
+.scene-title { font-size: 8px; color: var(--muted); }
+
+.scene-line {
+  margin: 0 0 16px;
+  font-size: 11px;
+  line-height: 2;
+  min-height: 4em;
+}
+/* Reveal the line by wiping a block across it — a real per-character type-on
+   would fight the pixel font's metrics and reflow every frame. */
+.scene-line.typing {
+  animation: scene-wipe 340ms steps(12) both;
+}
+@keyframes scene-wipe {
+  from { clip-path: inset(0 100% 0 0); opacity: 0.4; }
+  to   { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+
+.scene-augments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.scene-aug {
+  font-size: 8px;
+  padding: 6px 8px;
+  background: var(--ink-soft);
+  border: 2px solid var(--edge);
+  color: var(--cream);
+}
+.scene-aug[data-rarity='rare']   { border-color: var(--blue); }
+.scene-aug[data-rarity='cursed'] { border-color: var(--red); }
+
+.scene-next { width: 100%; }
+
+/* Deeper chapters bleed into the dialogue box itself. */
+.scene[data-horror='4'] .scene-name,
+.scene[data-horror='5'] .scene-name { color: #e0a05a; }
+.scene[data-horror='5'] .scene-box,
+.scene[data-horror='6'] .scene-box,
+.scene[data-horror='7'] .scene-box { border-color: #3a1416; }
+.scene[data-horror='7'] .scene-name {
+  color: var(--red);
+  animation: scene-flicker 3.4s steps(2) infinite;
+}
+@keyframes scene-flicker {
+  0%, 92%, 100% { opacity: 1; }
+  94% { opacity: 0.35; }
+  96% { opacity: 1; }
+  98% { opacity: 0.55; }
+}
+
+/* --------------------------------------------------------------------- */
+/* Campaign — mid-game taunt                                              */
+/* --------------------------------------------------------------------- */
+
+.taunt {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 30;
+  transform: translate(-50%, 12px);
+  display: grid;
+  gap: 6px;
+  max-width: min(420px, 90vw);
+  padding: 12px 16px;
+  background: var(--panel);
+  border: var(--bd) solid var(--edge);
+  box-shadow: 0 5px 0 var(--edge);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms, transform 300ms steps(4);
+}
+.taunt[hidden] { display: none; }
+.taunt.show { opacity: 1; transform: translate(-50%, 0); }
+.taunt-who { font-size: 8px; letter-spacing: 1px; color: var(--gold); }
+.taunt-line { font-size: 10px; line-height: 1.7; }
+
+/* --------------------------------------------------------------------- */
+/* Cheskers Mania — augment draft                                         */
+/* --------------------------------------------------------------------- */
+
+.mania-best { color: var(--gold); }
+.mania-round {
+  margin: 0 0 14px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--gold);
+}
+
+.aug-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.aug-card {
+  font-family: inherit;
+  display: grid;
+  gap: 8px;
+  padding: 14px 12px;
+  text-align: left;
+  color: var(--cream);
+  background: var(--ink-soft);
+  border: var(--bd) solid var(--edge);
+  box-shadow: 0 var(--drop) 0 var(--edge);
+  cursor: pointer;
+  transition: transform 70ms steps(2), box-shadow 70ms steps(2), background 120ms;
+}
+.aug-card:hover {
+  background: var(--panel-hi);
+  transform: translateY(-3px);
+  box-shadow: 0 calc(var(--drop) + 3px) 0 var(--edge);
+}
+.aug-card:active {
+  transform: translateY(var(--drop));
+  box-shadow: 0 0 0 var(--edge);
+}
+.aug-glyph { font-size: 22px; }
+.aug-name { font-size: 10px; letter-spacing: 1px; }
+.aug-blurb { font-size: 8px; line-height: 1.9; color: var(--muted); }
+.aug-rarity { font-size: 7px; letter-spacing: 1px; color: var(--muted); }
+
+.aug-card[data-rarity='common'] { border-color: var(--edge); }
+.aug-card[data-rarity='rare']   { border-color: var(--blue); }
+.aug-card[data-rarity='rare'] .aug-rarity   { color: var(--blue); }
+.aug-card[data-rarity='cursed'] { border-color: var(--red); }
+.aug-card[data-rarity='cursed'] .aug-rarity { color: var(--red); }
+.aug-card[data-rarity='cursed'] .aug-glyph {
+  animation: aug-throb 1.8s steps(4) infinite;
+}
+@keyframes aug-throb {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.held-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.held-label { font-size: 8px; letter-spacing: 1px; color: var(--muted); }
+.held-chip {
+  font-size: 8px;
+  padding: 5px 7px;
+  background: var(--ink-soft);
+  border: 2px solid var(--edge);
+}
+.held-chip[data-rarity='rare']   { border-color: var(--blue); }
+.held-chip[data-rarity='cursed'] { border-color: var(--red); }
+
+/* --------------------------------------------------------------------- */
+/* Horror escalation                                                      */
+/* --------------------------------------------------------------------- */
+
+/* A vignette that tightens with the level. Painted over everything except
+   the modals, so the room closes in without hiding what you are clicking. */
+.app::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(20, 4, 6, 0.55) 78%,
+    rgba(10, 2, 3, 0.9) 100%
+  );
+  transition: opacity 1.6s ease;
+}
+[data-horror='1'] .app::after { opacity: 0.18; }
+[data-horror='2'] .app::after { opacity: 0.34; }
+[data-horror='3'] .app::after { opacity: 0.5; }
+[data-horror='4'] .app::after { opacity: 0.66; }
+[data-horror='5'] .app::after { opacity: 0.8; }
+[data-horror='6'] .app::after { opacity: 0.9; }
+[data-horror='7'] .app::after { opacity: 1; }
+
+/* The board itself cools and dims. The canvas palette is already shifting
+   underneath this; the filter is what sells "the lights are going". */
+.board-frame {
+  transition: filter 1.6s ease;
+}
+[data-horror='3'] .board-frame { filter: brightness(0.94) contrast(1.04); }
+[data-horror='4'] .board-frame { filter: brightness(0.88) contrast(1.08); }
+[data-horror='5'] .board-frame { filter: brightness(0.82) contrast(1.12) saturate(0.9); }
+[data-horror='6'] .board-frame { filter: brightness(0.76) contrast(1.16) saturate(0.8); }
+[data-horror='7'] .board-frame { filter: brightness(0.7) contrast(1.2) saturate(0.7); }
+
+/* The room breathes. Slow enough that it reads as unease rather than motion. */
+[data-horror='5'] .app,
+[data-horror='6'] .app,
+[data-horror='7'] .app {
+  animation: horror-breathe 9s ease-in-out infinite;
+}
+@keyframes horror-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.006); }
+}
+
+/* At the bottom, the title stops being reliable. */
+[data-horror='6'] .logo,
+[data-horror='7'] .logo {
+  animation: horror-glitch 6s steps(1) infinite;
+}
+@keyframes horror-glitch {
+  0%, 88%, 100% { transform: translate(0, 0); opacity: 1; }
+  90% { transform: translate(-2px, 1px); opacity: 0.8; }
+  92% { transform: translate(2px, -1px); }
+  94% { transform: translate(0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-horror] .app,
+  [data-horror] .logo { animation: none !important; }
+}

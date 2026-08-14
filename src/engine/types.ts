@@ -27,6 +27,44 @@ export interface Piece {
   /** Stable across the whole game so the renderer can animate a piece as it
    *  travels rather than cross-fading two unrelated sprites. */
   id: number;
+  /** Set by the `royal_guard` augment: absorbs one capture, then breaks.
+   *  Optional so every position built without augments stays unchanged. */
+  shield?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Augments (Cheskers Mania, and the campaign's opponents)
+// ---------------------------------------------------------------------------
+
+/** A rule modifier granted to one side. Each is deliberately expressible
+ *  inside move generation or `applyMove`, so an augmented game is still the
+ *  same pure engine — the AI needs no special handling to play against one. */
+export type AugmentId =
+  // Movement
+  | 'backpedal'
+  | 'flank'
+  | 'flying_kings'
+  | 'early_crown'
+  | 'zealot_bishop'
+  | 'siege_rook'
+  | 'blink_king'
+  | 'amazon_queen'
+  | 'outrider_knight'
+  // Consequences
+  | 'royal_guard'
+  | 'undying'
+  | 'bloodcrown'
+  | 'relentless';
+
+/** Which augments each side is playing with. */
+export type AugmentSet = Partial<Record<Color, ReadonlyArray<AugmentId>>>;
+
+export function hasAugment(
+  rules: Rules,
+  color: Color,
+  id: AugmentId,
+): boolean {
+  return rules.augments?.[color]?.includes(id) ?? false;
 }
 
 export type Board = ReadonlyArray<Piece | null>;
@@ -65,6 +103,9 @@ export interface Rules {
   /** If a side has no legal move, treat it as a loss (checkers convention)
    *  rather than a draw. */
   lossOnNoMoves: boolean;
+  /** Per-side rule modifiers. Optional: a classic game has none, and rooms
+   *  created before augments existed simply omit the field. */
+  augments?: AugmentSet;
 }
 
 export const DEFAULT_RULES: Rules = {
@@ -85,6 +126,9 @@ export interface GameState {
   rules: Rules;
   /** Monotonic counter used to seed piece ids. */
   nextId: number;
+  /** Remaining `undying` respawns per side. Optional so hand-built test
+   *  positions and pre-augment saved states stay valid. */
+  revives?: Partial<Record<Color, number>>;
 }
 
 export const row = (sq: Sq): number => sq >> 3;
