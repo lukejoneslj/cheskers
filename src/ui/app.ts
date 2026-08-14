@@ -26,6 +26,7 @@ import {
   DEFAULT_RULES,
   squareName,
 } from '../engine/types';
+import { augment } from '../engine/augments';
 import { BoardView } from '../render/board-view';
 import { SpriteAtlas, spriteKey } from '../render/sprites';
 import { music } from './music';
@@ -78,8 +79,10 @@ export class App {
     overTitle: el('over-title'),
     overBody: el('over-body'),
     helpModal: el('help-modal'),
-    soundIcon: el('sound-icon'),
-    btnSound: el<HTMLButtonElement>('btn-sound'),
+    modeLabel: el('game-mode-label'),
+    modePanel: el('mode-panel'),
+    modePanelTitle: el('mode-panel-title'),
+    modeAction: el<HTMLButtonElement>('btn-mode-action'),
     btnResign: el<HTMLButtonElement>('btn-resign'),
     optForced: el<HTMLInputElement>('opt-forced'),
     optStuck: el<HTMLInputElement>('opt-stuck'),
@@ -213,23 +216,35 @@ export class App {
       this.showGameOver();
     });
 
-    el('btn-help').addEventListener('click', () => {
-      this.dom.helpModal.hidden = false;
-    });
+    // Sound and help each appear twice -- once on the menu, once on the board
+    // -- so both copies drive the same handler and stay in step.
+    for (const id of ['btn-help', 'btn-help-game']) {
+      document.getElementById(id)?.addEventListener('click', () => {
+        this.dom.helpModal.hidden = false;
+      });
+    }
     el('help-close').addEventListener('click', () => {
       this.dom.helpModal.hidden = true;
     });
 
-    this.dom.btnSound.addEventListener('click', () => {
-      sound.unlock();
-      music.unlock();
-      const muted = !sound.muted;
-      sound.setMuted(muted);
-      music.setMuted(muted);
-      this.dom.btnSound.setAttribute('aria-pressed', String(muted));
-      this.dom.soundIcon.textContent = muted ? '🔇' : '♪';
-      if (!muted) sound.tick();
-    });
+    const soundButtons = ['btn-sound', 'btn-sound-game']
+      .map((id) => document.getElementById(id))
+      .filter((node): node is HTMLElement => node !== null);
+    const soundIcons = ['sound-icon', 'sound-icon-game']
+      .map((id) => document.getElementById(id))
+      .filter((node): node is HTMLElement => node !== null);
+    for (const button of soundButtons) {
+      button.addEventListener('click', () => {
+        sound.unlock();
+        music.unlock();
+        const muted = !sound.muted;
+        sound.setMuted(muted);
+        music.setMuted(muted);
+        for (const b of soundButtons) b.setAttribute('aria-pressed', String(muted));
+        for (const icon of soundIcons) icon.textContent = muted ? '🔇' : '♪';
+        if (!muted) sound.tick();
+      });
+    }
 
     const applyRules = () => {
       // Spread the current ruleset rather than rebuilding it: augments are
@@ -259,11 +274,31 @@ export class App {
       if (e.key === 'n') this.newGame();
     });
 
-    // The online lobby is wired up separately; leave a clear affordance until
-    // then rather than a button that silently does nothing.
-    el('btn-online').addEventListener('click', () => {
+    el('mode-online').addEventListener('click', () => {
       window.dispatchEvent(new CustomEvent('cheskers:open-lobby'));
     });
+  }
+
+  /** Name of the mode currently in play, shown in the board screen's header
+   *  so it is always obvious what you are in the middle of. */
+  setModeLabel(label: string): void {
+    this.dom.modeLabel.textContent = label;
+  }
+
+  /** Optional mode-owned button in the board screen's sidebar — "END RUN"
+   *  for Mania, "CHAPTERS" for the campaign. Pass null to hide it. */
+  setModePanel(
+    panel: { title: string; action: string; onClick: () => void } | null,
+  ): void {
+    if (!panel) {
+      this.dom.modePanel.hidden = true;
+      this.dom.modeAction.onclick = null;
+      return;
+    }
+    this.dom.modePanel.hidden = false;
+    this.dom.modePanelTitle.textContent = panel.title;
+    this.dom.modeAction.textContent = panel.action;
+    this.dom.modeAction.onclick = () => panel.onClick();
   }
 
   setBinding(binding: MatchBinding): void {
@@ -553,6 +588,8 @@ export class App {
       elo.textContent = rating === undefined ? '' : String(rating);
       elo.hidden = rating === undefined;
 
+      this.renderAugments(color);
+
       const tray = el(`tray-${color}`);
       const taken = capturedBy(this.state, color);
       // Only append what is new so the pop animation does not replay for the
@@ -571,6 +608,29 @@ export class App {
         img.title = KIND_LABEL[kind];
         tray.appendChild(img);
       }
+    }
+  }
+
+  /** Show a side's augments on its player card. Driven straight off the game
+   *  state, so every mode that sets augments -- local Mania, online Mania, a
+   *  campaign chapter -- gets this for free. */
+  private renderAugments(color: Color): void {
+    const host = el(`aug-${color}`);
+    const ids = this.state.rules.augments?.[color] ?? [];
+    const signature = ids.join(',');
+    if (host.dataset.signature === signature) return; // nothing changed
+    host.dataset.signature = signature;
+
+    host.replaceChildren();
+    host.hidden = ids.length === 0;
+    for (const id of ids) {
+      const a = augment(id);
+      const chip = document.createElement('span');
+      chip.className = 'card-aug';
+      chip.dataset.rarity = a.rarity;
+      chip.title = `${a.name} — ${a.blurb}`;
+      chip.textContent = a.glyph;
+      host.appendChild(chip);
     }
   }
 

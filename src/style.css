@@ -827,11 +827,127 @@ select.field {
 }
 
 /* --------------------------------------------------------------------- */
-/* Game mode buttons                                                      */
+/* Main menu                                                              */
 /* --------------------------------------------------------------------- */
 
-.btn-story { background: #6b4a86; color: var(--cream); }
-.btn-mania { background: #d9663f; color: var(--ink); }
+.menu {
+  position: relative;
+  z-index: 1;
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+}
+.menu[hidden] { display: none; }
+
+.menu-topbar { margin-bottom: 8px; }
+
+.menu-tagline {
+  margin: 0 0 22px;
+  font-size: 9px;
+  line-height: 1.9;
+  color: var(--muted);
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.mode-card {
+  font-family: inherit;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 10px;
+  padding: 18px 16px;
+  text-align: left;
+  color: var(--cream);
+  background: var(--panel);
+  border: var(--bd) solid var(--edge);
+  box-shadow: 0 var(--drop) 0 var(--edge);
+  cursor: pointer;
+  transition: transform 70ms steps(2), box-shadow 70ms steps(2), background 140ms;
+}
+.mode-card:hover {
+  background: var(--panel-hi);
+  transform: translateY(-3px);
+  box-shadow: 0 calc(var(--drop) + 3px) 0 var(--edge);
+}
+.mode-card:active {
+  transform: translateY(var(--drop));
+  box-shadow: 0 0 0 var(--edge);
+}
+.mode-glyph { font-size: 26px; line-height: 1; }
+.mode-name { font-size: 12px; letter-spacing: 1px; }
+.mode-desc { font-size: 8px; line-height: 2; color: var(--muted); }
+.mode-tag {
+  justify-self: start;
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  padding: 5px 7px;
+  color: var(--ink);
+  background: var(--muted);
+}
+
+/* A stripe of colour per mode so the grid is scannable by shape and hue
+   rather than by reading every card. */
+.mode-card[data-tone='story']  { border-left: 8px solid #8a5fb0; }
+.mode-card[data-tone='story'] .mode-tag  { background: #8a5fb0; color: var(--cream); }
+.mode-card[data-tone='mania']  { border-left: 8px solid #e07a4a; }
+.mode-card[data-tone='mania'] .mode-tag  { background: #e07a4a; }
+.mode-card[data-tone='ai']     { border-left: 8px solid var(--blue); }
+.mode-card[data-tone='ai'] .mode-tag     { background: var(--blue); }
+.mode-card[data-tone='online'] { border-left: 8px solid var(--green); }
+.mode-card[data-tone='online'] .mode-tag { background: var(--green); }
+.mode-card[data-tone='local']  { border-left: 8px solid var(--gold); }
+.mode-card[data-tone='local'] .mode-tag  { background: var(--gold); }
+.mode-card[data-tone='help']   { border-left: 8px solid var(--muted); }
+
+.menu-options {
+  padding: 16px;
+  background: var(--panel);
+  border: var(--bd) solid var(--edge);
+}
+
+/* --------------------------------------------------------------------- */
+/* Game screen header                                                     */
+/* --------------------------------------------------------------------- */
+
+.btn-back { padding: 10px 14px; font-size: 9px; }
+
+.game-mode-label {
+  flex: 1;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--gold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Augment chips on the player cards -------------------------------------- */
+
+.card-augs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 0;
+}
+.card-augs[hidden] { display: none; }
+.card-aug {
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 5px;
+  background: var(--ink-soft);
+  border: 2px solid var(--edge);
+  cursor: help;
+}
+.card-aug[data-rarity='rare']   { border-color: var(--blue); }
+.card-aug[data-rarity='cursed'] { border-color: var(--red); }
+
+.lobby-toggle { margin: 4px 0 2px; }
 
 /* --------------------------------------------------------------------- */
 /* Campaign — chapter select                                              */

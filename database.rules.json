@@ -74,9 +74,27 @@
 
         "rules": {
           // Fixed at creation: changing the ruleset mid-game would desync the
-          // two engines.
+          // two engines. (The room-level .write already requires the room not
+          // to exist, so there is no later write for this to guard against --
+          // a granting .write on an ancestor cascades regardless.)
           ".write": false,
-          ".validate": "newData.hasChildren(['forcedJumps', 'lossOnNoMoves'])"
+          ".validate": "newData.hasChildren(['forcedJumps', 'lossOnNoMoves'])",
+          "forcedJumps": { ".validate": "newData.isBoolean()" },
+          "lossOnNoMoves": { ".validate": "newData.isBoolean()" },
+
+          // Mania rooms carry a rolled augment loadout per side. Both clients
+          // read the identical list, so their engines cannot disagree about
+          // what a move meant.
+          "augments": {
+            "$color": {
+              ".validate": "$color === 'w' || $color === 'b'",
+              "$index": {
+                ".validate": "newData.isString() && newData.val().length <= 24"
+              }
+            }
+          },
+
+          "$other": { ".validate": false }
         },
 
         "resigned": {

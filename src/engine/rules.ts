@@ -49,6 +49,24 @@ const LEAP2: ReadonlyArray<readonly [number, number]> = OMNI.map(
 );
 const SIDEWAYS: ReadonlyArray<readonly [number, number]> = [[0, 1], [0, -1]];
 
+/** How many of the owner's turns a `powder_keg` burns for before it goes off.
+ *  Long enough to plan around, short enough to force the issue. */
+export const FUSE_TURNS = 6;
+/** File the armed checker starts on. Fixed rather than random: both clients in
+ *  an online game build the opening position independently and must agree. */
+const KEG_FILE = 3;
+/** Marks at which `veterancy` pays out. */
+const VETERAN_LIFE_AT = 2;
+const VETERAN_STEP_AT = 3;
+
+/** `ascension` walks a capturing piece up this ladder, one rung per kill. */
+const ASCENSION_LADDER: Partial<Record<Kind, Kind>> = {
+  c: 'N',
+  N: 'B',
+  B: 'R',
+  R: 'Q',
+};
+
 export const at = (board: Board, s: Sq): Piece | null => board[s] ?? null;
 
 const isEnemy = (p: Piece | null, color: Color): p is Piece =>
@@ -79,12 +97,29 @@ export function initialState(rules: Rules = DEFAULT_RULES): GameState {
   }
 
   // Augments that start the game already in effect rather than triggering
-  // off a move: a guarded King wears its shield from move one.
+  // off a move.
   for (const color of ['w', 'b'] as Color[]) {
-    if (!hasAugment(rules, color, 'royal_guard')) continue;
-    const kingSq = board.findIndex((p) => p?.kind === 'K' && p.color === color);
-    const king = kingSq >= 0 ? board[kingSq] : null;
-    if (king) board[kingSq] = { ...king, shield: true };
+    if (hasAugment(rules, color, 'royal_guard')) {
+      const kingSq = board.findIndex((p) => p?.kind === 'K' && p.color === color);
+      const king = kingSq >= 0 ? board[kingSq] : null;
+      if (king) board[kingSq] = { ...king, shield: true };
+    }
+
+    if (hasAugment(rules, color, 'heartstone')) {
+      for (let s = 0; s < 64; s++) {
+        const piece = board[s];
+        if (piece?.color === color && piece.kind === 'c') {
+          board[s] = { ...piece, lives: (piece.lives ?? 0) + 1 };
+        }
+      }
+    }
+
+    if (hasAugment(rules, color, 'powder_keg')) {
+      const rank = color === 'w' ? 6 : 1;
+      const kegSq = sq(rank, KEG_FILE);
+      const carrier = board[kegSq];
+      if (carrier) board[kegSq] = { ...carrier, bomb: FUSE_TURNS };
+    }
   }
 
   return {
@@ -102,6 +137,72 @@ export function initialState(rules: Rules = DEFAULT_RULES): GameState {
       b: hasAugment(rules, 'b', 'undying') ? 1 : 0,
     },
   };
+}
+
+/** Blow up the piece on `at` and everything on the eight squares around it,
+ *  regardless of colour. Mutates `board` in place and returns the squares
+ *  cleared, so the renderer can throw the right debris.
+ *
+ * A chain is deliberately *not* implemented: one keg setting off another
+ * would make the blast radius unpredictable in a game where you are supposed
+ * to be able to count squares. */
+function detonate(board: (Piece | null)[], centre: Sq): Sq[] {
+  const cleared: Sq[] = [];
+  const r0 = row(centre);
+  const c0 = col(centre);
+  if (board[centre]) {
+    board[centre] = null;
+    cleared.push(centre);
+  }
+  for (const [dr, dc] of OMNI) {
+    const r = r0 + dr;
+    const c = c0 + dc;
+    if (!onBoard(r, c)) continue;
+    const s = sq(r, c);
+    if (!board[s]) continue;
+    board[s] = null;
+    cleared.push(s);
+  }
+  return cleared;
+}
+
+/** After a blast, work out whether anyone still has a King. */
+function settleAfterBlast(state: GameState, board: (Piece | null)[]): GameState | null {
+  const whiteKing = board.some((p) => p?.kind === 'K' && p.color === 'w');
+  const blackKing = board.some((p) => p?.kind === 'K' && p.color === 'b');
+  if (whiteKing && blackKing) return null;
+  const next = { ...state, board };
+  if (!whiteKing && !blackKing) return finish(next, null, 'king-capture');
+  return finish(next, whiteKing ? 'w' : 'b', 'king-capture');
+}
+
+/** Burn one turn off every fuse belonging to the side about to move, and set
+ *  off anything that reaches zero. */
+function tickBombs(state: GameState): GameState {
+  const armed: Sq[] = [];
+  state.board.forEach((piece, s) => {
+    if (piece?.color === state.turn && piece.bomb !== undefined) armed.push(s);
+  });
+  if (armed.length === 0) return state;
+
+  const board = state.board.slice() as (Piece | null)[];
+  const blown: Sq[] = [];
+  for (const s of armed) {
+    const piece = board[s];
+    if (!piece || piece.bomb === undefined) continue;
+    const fuse = piece.bomb - 1;
+    if (fuse > 0) {
+      board[s] = { ...piece, bomb: fuse };
+    } else {
+      blown.push(s);
+    }
+  }
+  // Every fuse is read before any of them goes off, so two kegs expiring on
+  // the same turn cannot delete each other mid-loop.
+  for (const s of blown) detonate(board, s);
+  if (blown.length === 0) return { ...state, board };
+
+  return settleAfterBlast(state, board) ?? { ...state, board };
 }
 
 /** Where an `undying` checker comes back: its own checker rank first, then
@@ -306,6 +407,16 @@ export function movesForPiece(
       checkerMoves(board, from, piece, out, rules);
       break;
   }
+
+  // A decorated veteran learns to step in any direction, on top of whatever
+  // its kind already does.
+  if (
+    (piece.marks ?? 0) >= VETERAN_STEP_AT &&
+    hasAugment(rules, own, 'veterancy') &&
+    piece.kind !== 'K'
+  ) {
+    step(board, from, own, OMNI, out);
+  }
   return out;
 }
 
@@ -395,6 +506,29 @@ export function applyMove(state: GameState, move: Move): GameState {
     });
   }
 
+  // A spare life turns the attack aside: the victim survives where it stands,
+  // spends the life, and the attacker simply does not get the square.
+  if (capturedPiece && (capturedPiece.lives ?? 0) > 0 && move.captured !== null) {
+    board[move.captured] = { ...capturedPiece, lives: (capturedPiece.lives ?? 0) - 1 };
+    const bounced: MoveRecord = {
+      ...move,
+      captured: null,
+      promotes: false,
+      kind: mover.kind,
+      color: mover.color,
+      capturedKind: null,
+      chained: state.chain !== null,
+      notation: `${label(mover)}${squareName(move.from)}✗${squareName(move.to)}`,
+    };
+    return startTurn({
+      ...state,
+      board,
+      history: [...state.history, bounced],
+      chain: null,
+      turn: other(state.turn),
+    });
+  }
+
   if (move.captured !== null) board[move.captured] = null;
   board[move.from] = null;
 
@@ -403,8 +537,68 @@ export function applyMove(state: GameState, move: Move): GameState {
     move.captured !== null && hasAugment(rules, mover.color, 'bloodcrown');
   const promotes =
     mover.kind === 'c' && !mover.kinged && (move.promotes || bloodcrown);
-  const moved: Piece = promotes ? { ...mover, kinged: true } : mover;
+  let moved: Piece = promotes ? { ...mover, kinged: true } : mover;
+
+  if (move.captured !== null) {
+    const marks = (moved.marks ?? 0) + 1;
+    moved = { ...moved, marks };
+
+    // `veterancy`: the second kill earns a spare life, the third earns the
+    // extra step (granted in movesForPiece, off the same counter).
+    if (hasAugment(rules, mover.color, 'veterancy') && marks === VETERAN_LIFE_AT) {
+      moved = { ...moved, lives: (moved.lives ?? 0) + 1 };
+    }
+
+    // `ascension`: every kill walks the piece one rung up the ladder.
+    if (hasAugment(rules, mover.color, 'ascension')) {
+      const next = ASCENSION_LADDER[moved.kind];
+      if (next) moved = { ...moved, kind: next, kinged: false };
+    }
+  }
+
   board[move.to] = moved;
+
+  // Taking an armed piece sets it off where it stood -- which can easily take
+  // the attacker with it.
+  if (capturedPiece?.bomb !== undefined && move.captured !== null) {
+    detonate(board, move.captured);
+    const ended = settleAfterBlast(state, board);
+    if (ended) {
+      return {
+        ...ended,
+        history: [
+          ...state.history,
+          {
+            ...move,
+            promotes,
+            kind: mover.kind,
+            color: mover.color,
+            capturedKind: capturedPiece.kind,
+            chained: state.chain !== null,
+            notation: `${label(mover)}${squareName(move.from)}✸${squareName(move.to)}`,
+          },
+        ],
+      };
+    }
+    return startTurn({
+      ...state,
+      board,
+      history: [
+        ...state.history,
+        {
+          ...move,
+          promotes,
+          kind: mover.kind,
+          color: mover.color,
+          capturedKind: capturedPiece.kind,
+          chained: state.chain !== null,
+          notation: `${label(mover)}${squareName(move.from)}✸${squareName(move.to)}`,
+        },
+      ],
+      chain: null,
+      turn: other(state.turn),
+    });
+  }
 
   // `undying`: the first man a side loses climbs back out onto its home rank.
   // It comes back with a fresh id so the renderer treats it as a new arrival
@@ -465,10 +659,14 @@ export const other = (c: Color): Color => (c === 'w' ? 'b' : 'w');
 /** Settle the position at the start of a turn: if the side to move is stuck,
  *  decide the game per the ruleset. */
 function startTurn(state: GameState): GameState {
-  if (legalMoves(state).length > 0) return state;
-  return state.rules.lossOnNoMoves
-    ? finish(state, other(state.turn), 'no-moves')
-    : finish(state, null, 'no-moves');
+  // Fuses burn down before the side to move gets to act, so an armed piece
+  // cannot be walked out of trouble on the very turn it was due to go off.
+  const ticked = tickBombs(state);
+  if (ticked.status === 'over') return ticked;
+  if (legalMoves(ticked).length > 0) return ticked;
+  return ticked.rules.lossOnNoMoves
+    ? finish(ticked, other(ticked.turn), 'no-moves')
+    : finish(ticked, null, 'no-moves');
 }
 
 function finish(state: GameState, winner: Color | null, reason: WinReason): GameState {

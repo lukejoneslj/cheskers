@@ -7,6 +7,7 @@
  * re-validated against our own engine before it is played.
  */
 
+import { rollLoadout } from '../engine/augments';
 import type { Outcome } from '../engine/elo';
 import type { Color, Move, Rules } from '../engine/types';
 import { accounts, cleanName } from '../net/auth';
@@ -14,6 +15,7 @@ import { Room, type RoomSnapshot, type Seat, type WireMove } from '../net/room';
 import { isConfigured } from '../net/firebase';
 import type { App } from './app';
 import type { MatchPeer } from './match-peer';
+import { screens } from './screens';
 import { sound } from './sound';
 
 const el = <T extends HTMLElement>(id: string): T => {
@@ -21,6 +23,9 @@ const el = <T extends HTMLElement>(id: string): T => {
   if (!node) throw new Error(`missing element #${id}`);
   return node as T;
 };
+
+/** Augments rolled per side when a room is created in Mania mode. */
+const MANIA_AUGMENTS = 3;
 
 export class Lobby implements MatchPeer {
   private readonly room: Room;
@@ -47,6 +52,7 @@ export class Lobby implements MatchPeer {
     roomCode: el('room-code'),
     status: el('lobby-status'),
     error: el('lobby-error'),
+    mania: el<HTMLInputElement>('lobby-mania'),
     create: el<HTMLButtonElement>('lobby-create'),
     join: el<HTMLButtonElement>('lobby-join'),
     copy: el<HTMLButtonElement>('lobby-copy'),
@@ -186,8 +192,17 @@ export class Lobby implements MatchPeer {
     return name;
   }
 
+  /** The ruleset a newly created room is fixed to. Augments are rolled once,
+   *  here, and stored in the room: there is no synchronised draft protocol,
+   *  so both clients simply read the same loadout and their engines cannot
+   *  disagree about what a move meant. */
   private currentRules(): Rules {
-    return this.app.getState().rules;
+    const base = this.app.getState().rules;
+    return {
+      forcedJumps: base.forcedJumps,
+      lossOnNoMoves: base.lossOnNoMoves,
+      augments: this.dom.mania.checked ? rollLoadout(MANIA_AUGMENTS) : {},
+    };
   }
 
   /** Run an async action with the button disabled and errors surfaced. */
@@ -231,7 +246,8 @@ export class Lobby implements MatchPeer {
     this.app.setPresence({});
     this.app.setRatings({});
     this.app.showRatingChange(null);
-    this.app.newGame();
+    this.app.setModePanel(null);
+    this.app.resetForMatch({ ...this.app.getState().rules, augments: {} });
   }
 
   // -------------------------------------------------------------------------
@@ -256,6 +272,20 @@ export class Lobby implements MatchPeer {
       onLocalMove: (move) => this.publish(move),
     });
     this.app.setPresence(snapshot.online);
+
+    const mania =
+      (snapshot.rules.augments?.w?.length ?? 0) > 0 ||
+      (snapshot.rules.augments?.b?.length ?? 0) > 0;
+    this.app.setModeLabel(
+      `${mania ? 'ONLINE MANIA' : 'ONLINE'} · ROOM ${snapshot.code}`,
+    );
+    this.app.setModePanel({
+      title: 'ONLINE',
+      action: 'ROOM',
+      onClick: () => this.open(),
+    });
+    // Sitting down at a room means leaving the menu behind.
+    screens.show('game');
 
     this.applyPending(snapshot);
 

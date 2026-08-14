@@ -245,6 +245,155 @@ describe('consequence augments', () => {
   });
 });
 
+describe('per-piece augments', () => {
+  it('heartstone gives every checker a spare life', () => {
+    const s = initialState(rules(['heartstone']));
+    const whiteCheckers = s.board.filter((p) => p?.color === 'w' && p.kind === 'c');
+    expect(whiteCheckers).toHaveLength(8);
+    expect(whiteCheckers.every((p) => p!.lives === 1)).toBe(true);
+    // The other side gets nothing.
+    expect(s.board.filter((p) => p?.color === 'b' && p.kind === 'c')
+      .every((p) => p!.lives === undefined)).toBe(true);
+  });
+
+  it('a spare life bounces the attack and keeps both pieces in place', () => {
+    const s = position({ d4: 'wc', e5: 'bc', a1: 'wK', h8: 'bK' }, {});
+    const board = s.board.slice() as (Piece | null)[];
+    board[S('e5')] = { ...board[S('e5')]!, lives: 1 };
+    const guarded: GameState = { ...s, board };
+
+    const after = applyMove(guarded, findMove(guarded, S('d4'), S('f6'))!);
+    expect(at(after.board, 'd4')?.kind).toBe('c');  // attacker never moved
+    expect(at(after.board, 'f6')).toBeNull();
+    expect(at(after.board, 'e5')?.lives).toBe(0);   // victim spent the life
+    expect(after.turn).toBe('b');
+
+    // With the life spent, the same hop now lands.
+    const spent = applyMove(after, findMove({ ...after, turn: 'w' }, S('d4'), S('f6'))!);
+    expect(at(spent.board, 'e5')).toBeNull();
+  });
+
+  it('ascension walks a capturing piece up the ladder', () => {
+    const s = position({ d4: 'wc', e5: 'bc', a1: 'wK', h8: 'bK' }, {
+      rules: rules(['ascension']),
+    });
+    const after = applyMove(s, findMove(s, S('d4'), S('f6'))!);
+    expect(at(after.board, 'f6')?.kind).toBe('N');
+
+    // A knight that takes becomes a bishop, and so on up to a queen.
+    const ladder = position({ d4: 'wR', e5: 'bc', a1: 'wK', h8: 'bK' }, {
+      rules: rules(['ascension']),
+    });
+    const promoted = applyMove(ladder, findMove(ladder, S('d4'), S('d5'))!);
+    void promoted;
+    const rookTakes = position({ d4: 'wR', d5: 'bc', a1: 'wK', h8: 'bK' }, {
+      rules: rules(['ascension']),
+    });
+    expect(at(applyMove(rookTakes, findMove(rookTakes, S('d4'), S('d5'))!).board, 'd5')?.kind)
+      .toBe('Q');
+  });
+
+  it('ascension stops at queen', () => {
+    const s = position({ d4: 'wQ', d5: 'bc', a1: 'wK', h8: 'bK' }, {
+      rules: rules(['ascension']),
+    });
+    expect(at(applyMove(s, findMove(s, S('d4'), S('d5'))!).board, 'd5')?.kind).toBe('Q');
+  });
+
+  it('veterancy pays a life at two kills and a free step at three', () => {
+    let s = position(
+      { d4: 'wR', d5: 'bc', d6: 'bc', d7: 'bc', a1: 'wK', h8: 'bK' },
+      { rules: rules(['veterancy']) },
+    );
+    // First kill: one mark, nothing yet.
+    s = applyMove(s, findMove(s, S('d4'), S('d5'))!);
+    expect(at(s.board, 'd5')?.marks).toBe(1);
+    expect(at(s.board, 'd5')?.lives).toBeUndefined();
+
+    // Second kill: the spare life lands.
+    s = { ...s, turn: 'w' };
+    s = applyMove(s, findMove(s, S('d5'), S('d6'))!);
+    expect(at(s.board, 'd6')?.marks).toBe(2);
+    expect(at(s.board, 'd6')?.lives).toBe(1);
+
+    // Third kill: now it also steps any direction, which a rook cannot do.
+    s = { ...s, turn: 'w' };
+    s = applyMove(s, findMove(s, S('d6'), S('d7'))!);
+    expect(at(s.board, 'd7')?.marks).toBe(3);
+    expect(targets(legalMovesFrom({ ...s, turn: 'w' }, S('d7')))).toContain('c6');
+  });
+
+  it('veterancy marks are counted even without the augment', () => {
+    // The counter is free; only the payouts are gated, so turning the augment
+    // on mid-run would not retroactively reward old kills.
+    const s = position({ d4: 'wR', d5: 'bc', a1: 'wK', h8: 'bK' });
+    const after = applyMove(s, findMove(s, S('d4'), S('d5'))!);
+    expect(at(after.board, 'd5')?.marks).toBe(1);
+    expect(at(after.board, 'd5')?.lives).toBeUndefined();
+  });
+
+  it('powder keg arms one checker on the d-file', () => {
+    const s = initialState(rules(['powder_keg']));
+    const armed = s.board.filter((p) => p?.bomb !== undefined);
+    expect(armed).toHaveLength(1);
+    expect(armed[0]!.color).toBe('w');
+    expect(armed[0]!.kind).toBe('c');
+    expect(armed[0]!.bomb).toBe(6);
+    expect(s.board[S('d2')]?.bomb).toBe(6);
+  });
+
+  it('taking an armed piece levels the neighbourhood', () => {
+    // The hop d4xe5 lands on f6, which puts the attacker inside the blast.
+    const s = position(
+      { d4: 'wc', e5: 'bc', d6: 'bN', f4: 'bR', a1: 'wK', h8: 'bK' },
+      {},
+    );
+    const board = s.board.slice() as (Piece | null)[];
+    board[S('e5')] = { ...board[S('e5')]!, bomb: 3 };
+    const armed: GameState = { ...s, board };
+
+    const after = applyMove(armed, findMove(armed, S('d4'), S('f6'))!);
+    expect(at(after.board, 'e5')).toBeNull();  // the keg
+    expect(at(after.board, 'd6')).toBeNull();  // neighbour
+    expect(at(after.board, 'f4')).toBeNull();  // neighbour
+    expect(at(after.board, 'f6')).toBeNull();  // the attacker that landed beside it
+    // Far corners are untouched.
+    expect(at(after.board, 'a1')?.kind).toBe('K');
+    expect(at(after.board, 'h8')?.kind).toBe('K');
+  });
+
+  it('a fuse burns down on its owner turns and then goes off', () => {
+    const s = position({ d4: 'wc', e5: 'wN', a1: 'wK', h8: 'bK', a8: 'bc' }, {});
+    const board = s.board.slice() as (Piece | null)[];
+    board[S('d4')] = { ...board[S('d4')]!, bomb: 2 };
+    let game: GameState = { ...s, board, turn: 'b' };
+
+    // Black moves; white's fuse ticks as white's turn opens.
+    game = applyMove(game, findMove(game, S('a8'), S('b7'))!);
+    expect(at(game.board, 'd4')?.bomb).toBe(1);
+
+    // White moves something else, black replies, and the fuse hits zero.
+    game = applyMove(game, findMove(game, S('a1'), S('b1'))!);
+    game = applyMove(game, findMove(game, S('b7'), S('c6'))!);
+    expect(at(game.board, 'd4')).toBeNull();
+    expect(at(game.board, 'e5')).toBeNull(); // its own knight caught the blast
+  });
+
+  it('a blast that takes the last king ends the game', () => {
+    const s = position({ d4: 'wc', e5: 'bK', a1: 'wK' }, {});
+    const board = s.board.slice() as (Piece | null)[];
+    board[S('d4')] = { ...board[S('d4')]!, bomb: 1 };
+    const game: GameState = { ...s, board, turn: 'b' };
+
+    // The black king steps to d5 — still inside the blast radius — and the
+    // fuse runs out the moment white's turn opens.
+    const after = applyMove(game, findMove(game, S('e5'), S('d5'))!);
+    expect(at(after.board, 'd5')).toBeNull();
+    expect(after.status).toBe('over');
+    expect(after.winner).toBe('w');
+  });
+});
+
 describe('augments are per side', () => {
   it('does not grant one side the other side augments', () => {
     const s = position({ d4: 'wc', d5: 'bc' }, { rules: rules(['backpedal']) });

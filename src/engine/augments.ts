@@ -6,7 +6,7 @@
  * against augments without knowing they exist.
  */
 
-import type { AugmentId } from './types';
+import type { AugmentId, AugmentSet, Color } from './types';
 
 export type Rarity = 'common' | 'rare' | 'cursed';
 
@@ -85,6 +85,20 @@ export const AUGMENTS: ReadonlyArray<Augment> = [
     glyph: '☩',
   },
   {
+    id: 'heartstone',
+    name: 'HEARTSTONE',
+    blurb: 'Every checker of yours has a spare life. Attacks bounce off.',
+    rarity: 'rare',
+    glyph: '♥',
+  },
+  {
+    id: 'veterancy',
+    name: 'VETERANCY',
+    blurb: 'Pieces bank kills: 2 earns a spare life, 3 earns a step any way.',
+    rarity: 'rare',
+    glyph: '✚',
+  },
+  {
     id: 'flying_kings',
     name: 'FLYING KINGS',
     blurb: 'Your crowned checkers slide any distance and take from range.',
@@ -112,6 +126,20 @@ export const AUGMENTS: ReadonlyArray<Augment> = [
     rarity: 'cursed',
     glyph: '☠',
   },
+  {
+    id: 'ascension',
+    name: 'ASCENSION',
+    blurb: 'Each kill promotes the killer: checker → knight → bishop → rook → queen.',
+    rarity: 'cursed',
+    glyph: '⇧',
+  },
+  {
+    id: 'powder_keg',
+    name: 'POWDER KEG',
+    blurb: 'One checker is armed. It levels every neighbour when taken, or in six turns.',
+    rarity: 'cursed',
+    glyph: '💣',
+  },
 ];
 
 const BY_ID = new Map(AUGMENTS.map((a) => [a.id, a]));
@@ -120,6 +148,27 @@ export function augment(id: AugmentId): Augment {
   const found = BY_ID.get(id);
   if (!found) throw new Error(`unknown augment: ${id}`);
   return found;
+}
+
+/** Roll an independent random loadout for each side.
+ *
+ * This is how online Mania works: there is no synchronised draft protocol,
+ * the room simply rolls both loadouts once at creation and stores them, so
+ * both clients read the identical ruleset and their engines cannot disagree.
+ * Independent rolls mean the two sides get different toys, which is the point
+ * — it is the ARAM bargain, not a mirror match. */
+export function rollLoadout(count: number): AugmentSet {
+  const pick = (): AugmentId[] => {
+    const pool = [...AUGMENTS];
+    const out: AugmentId[] = [];
+    for (let i = 0; i < count && pool.length > 0; i++) {
+      const index = Math.floor(Math.random() * pool.length);
+      out.push(pool.splice(index, 1)[0]!.id);
+    }
+    return out;
+  };
+  const set: Record<Color, AugmentId[]> = { w: pick(), b: pick() };
+  return set;
 }
 
 /** Deal `count` distinct augments the player does not already hold.

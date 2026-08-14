@@ -12,6 +12,7 @@ import type { Color, Rules } from '../engine/types';
 import { DEFAULT_RULES } from '../engine/types';
 import type { App } from './app';
 import type { MatchPeer } from './match-peer';
+import { screens } from './screens';
 import { sound } from './sound';
 
 export type DifficultyKey = keyof typeof DIFFICULTIES;
@@ -78,10 +79,6 @@ export class AiMatch implements MatchPeer {
   }
 
   private bind(): void {
-    el('btn-ai').addEventListener('click', () => {
-      this.dom.modal.hidden = false;
-      this.dom.leave.hidden = !this.active;
-    });
     this.dom.close.addEventListener('click', () => {
       this.dom.modal.hidden = true;
     });
@@ -89,11 +86,14 @@ export class AiMatch implements MatchPeer {
       sound.tick();
       const colorChoice = this.dom.color.value as Color | 'random';
       this.dom.modal.hidden = true;
+      const difficulty = this.dom.difficulty.value as DifficultyKey;
       this.startMatch({
         humanColor:
           colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : colorChoice,
-        difficulty: this.dom.difficulty.value as DifficultyKey,
+        difficulty,
       });
+      this.app.setModeLabel(`VS COMPUTER · ${DIFFICULTIES[difficulty].label.toUpperCase()}`);
+      this.app.setModePanel(null);
       this.dom.leave.hidden = false;
     });
     this.dom.leave.addEventListener('click', () => {
@@ -150,6 +150,7 @@ export class AiMatch implements MatchPeer {
     this.spec = spec;
     this.active = true;
     this.begin(spec);
+    screens.show('game');
   }
 
   private begin(spec: MatchSpec): void {

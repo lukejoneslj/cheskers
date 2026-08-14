@@ -4,6 +4,7 @@
  *  that gesture (the button click) is guaranteed to exist. */
 
 import { music } from './music';
+import { screens } from './screens';
 import { sound } from './sound';
 
 const FADE_MS = 420;
@@ -12,7 +13,6 @@ export class TitleScreen {
   private readonly screen = document.getElementById('title-screen')!;
   private readonly video = document.getElementById('title-video') as HTMLVideoElement;
   private readonly fade = document.getElementById('title-fade') as HTMLDivElement;
-  private readonly app = document.getElementById('app') as HTMLDivElement;
   private readonly startBtn = document.getElementById('title-start') as HTMLButtonElement;
 
   constructor() {
@@ -45,10 +45,8 @@ export class TitleScreen {
     requestAnimationFrame(() => this.fade.classList.add('title-fade-in'));
 
     window.setTimeout(() => {
-      this.app.hidden = false;
-      // The board was sized while `#app` had no layout at all; nudge it once
-      // real dimensions exist.
-      window.dispatchEvent(new Event('resize'));
+      // The title hands off to the mode menu, not straight to the board.
+      screens.show('menu');
 
       window.setTimeout(() => {
         this.fade.classList.remove('title-fade-in');

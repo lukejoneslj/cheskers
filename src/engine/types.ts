@@ -30,6 +30,15 @@ export interface Piece {
   /** Set by the `royal_guard` augment: absorbs one capture, then breaks.
    *  Optional so every position built without augments stays unchanged. */
   shield?: boolean;
+  /** Spare lives. A capture attempt on a piece with lives left bounces: the
+   *  victim survives, spends a life, and the attacker stays where it was. */
+  lives?: number;
+  /** Turns of fuse remaining on an armed piece. Ticks down at the start of
+   *  the owner's turn; detonates at zero, or immediately if captured. */
+  bomb?: number;
+  /** Captures this piece has personally made — the stacking counter behind
+   *  `veterancy` and `ascension`. */
+  marks?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,7 +63,12 @@ export type AugmentId =
   | 'royal_guard'
   | 'undying'
   | 'bloodcrown'
-  | 'relentless';
+  | 'relentless'
+  // Per-piece: things that live on a single piece and change over a game
+  | 'heartstone'
+  | 'veterancy'
+  | 'ascension'
+  | 'powder_keg';
 
 /** Which augments each side is playing with. */
 export type AugmentSet = Partial<Record<Color, ReadonlyArray<AugmentId>>>;

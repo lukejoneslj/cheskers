@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { chooseMove, DIFFICULTIES } from './ai';
 import { applyMove, initialState, legalMoves } from './rules';
@@ -109,15 +109,36 @@ describe('chooseMove', () => {
     expect(elapsed).toBeLessThan(budget * 6);
   });
 
-  it('easy difficulty is at least occasionally random across many draws', () => {
+  it('plays a random legal move when the difficulty rolls for one', () => {
+    // Driving Math.random directly rather than sampling many draws: a
+    // probabilistic assertion here would flake roughly once every few hundred
+    // runs, which is worse than useless in CI.
     const s = initialState();
-    const moves = new Set<string>();
-    for (let i = 0; i < 20; i++) {
-      const m = chooseMove(s, DIFFICULTIES.easy)!;
-      moves.add(`${m.from}-${m.to}`);
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      const move = chooseMove(s, DIFFICULTIES.easy)!;
+      // roll 0 < 0.25 takes the random branch, and index floor(0 * n) === 0.
+      expect(move).toEqual(legalMoves(s)[0]);
+    } finally {
+      spy.mockRestore();
     }
-    // With 25% randomness and the position wide open, twenty draws should not
-    // all land on the exact same move.
-    expect(moves.size).toBeGreaterThan(1);
+  });
+
+  it('searches instead when the roll misses', () => {
+    const s = initialState();
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    try {
+      const a = chooseMove(s, DIFFICULTIES.easy)!;
+      const b = chooseMove(s, DIFFICULTIES.easy)!;
+      // A search over the same position is deterministic, so the two agree --
+      // and the answer is not simply the first legal move.
+      expect(a).toEqual(b);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('hard difficulty never rolls for a random move', () => {
+    expect(DIFFICULTIES.hard.randomness).toBe(0);
   });
 });

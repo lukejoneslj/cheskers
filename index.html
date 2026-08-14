@@ -26,9 +26,9 @@
 </div>
 <div id="title-fade" class="title-fade" hidden></div>
 
-<div id="app" class="app" hidden>
-
-  <header class="topbar">
+<!-- Main menu --------------------------------------------------------- -->
+<div id="menu" class="menu" hidden>
+  <header class="topbar menu-topbar">
     <h1 class="logo">
       <span class="logo-ches">CHES</span><span class="logo-kers">KERS</span>
     </h1>
@@ -44,6 +44,80 @@
     </div>
   </header>
 
+  <p class="menu-tagline">Chess and checkers on one board. Take the king to win.</p>
+
+  <div class="mode-grid">
+    <button class="mode-card" id="mode-campaign" type="button" data-tone="story">
+      <span class="mode-glyph">🕯</span>
+      <span class="mode-name">THE LONG GAME</span>
+      <span class="mode-desc">Eight opponents. Each plays a little further from the rules you were taught.</span>
+      <span class="mode-tag" id="mode-campaign-tag">CAMPAIGN</span>
+    </button>
+
+    <button class="mode-card" id="mode-mania" type="button" data-tone="mania">
+      <span class="mode-glyph">🎲</span>
+      <span class="mode-name">CHESKERS MANIA</span>
+      <span class="mode-desc">Draft rule-breaking augments each round. Lose once and the run ends.</span>
+      <span class="mode-tag" id="mode-mania-tag">ROGUELIKE</span>
+    </button>
+
+    <button class="mode-card" id="mode-ai" type="button" data-tone="ai">
+      <span class="mode-glyph">🤖</span>
+      <span class="mode-name">VS COMPUTER</span>
+      <span class="mode-desc">Play the search engine at three strengths. Pick your colour.</span>
+      <span class="mode-tag">SINGLE PLAYER</span>
+    </button>
+
+    <button class="mode-card" id="mode-online" type="button" data-tone="online">
+      <span class="mode-glyph">🌐</span>
+      <span class="mode-name">PLAY ONLINE</span>
+      <span class="mode-desc">Create a room, share the code. Ranked, with optional Mania augments.</span>
+      <span class="mode-tag">MULTIPLAYER</span>
+    </button>
+
+    <button class="mode-card" id="mode-local" type="button" data-tone="local">
+      <span class="mode-glyph">👥</span>
+      <span class="mode-name">PASS AND PLAY</span>
+      <span class="mode-desc">Two players, one screen, no accounts needed.</span>
+      <span class="mode-tag">HOTSEAT</span>
+    </button>
+
+    <button class="mode-card" id="mode-help" type="button" data-tone="help">
+      <span class="mode-glyph">📖</span>
+      <span class="mode-name">HOW TO PLAY</span>
+      <span class="mode-desc">The rules in one screen: hops, crowning, and taking the king.</span>
+      <span class="mode-tag">RULES</span>
+    </button>
+  </div>
+
+  <section class="menu-options">
+    <h2 class="panel-title">LOCAL GAME OPTIONS</h2>
+    <label class="toggle">
+      <input type="checkbox" id="opt-forced">
+      <span class="toggle-box"></span>
+      <span class="toggle-label">Forced jumps</span>
+    </label>
+    <label class="toggle">
+      <input type="checkbox" id="opt-stuck" checked>
+      <span class="toggle-box"></span>
+      <span class="toggle-label">No moves = loss</span>
+    </label>
+  </section>
+</div>
+
+<div id="app" class="app" hidden>
+
+  <header class="topbar">
+    <button id="btn-menu" class="btn btn-back" type="button">‹ MENU</button>
+    <span class="game-mode-label" id="game-mode-label">LOCAL GAME</span>
+    <div class="topbar-actions">
+      <button id="btn-sound-game" class="chip" type="button" title="Toggle sound">
+        <span id="sound-icon-game">♪</span>
+      </button>
+      <button id="btn-help-game" class="chip" type="button" title="How to play">?</button>
+    </div>
+  </header>
+
   <main class="layout">
 
     <!-- ---------------------------------------------------------------- -->
@@ -55,6 +129,7 @@
           <span class="player-elo" id="elo-b" hidden></span>
           <span class="player-count" id="count-b">16</span>
         </div>
+        <div class="card-augs" id="aug-b" hidden></div>
         <div class="tray" id="tray-b" aria-label="Pieces captured by Black"></div>
       </section>
 
@@ -65,6 +140,7 @@
           <span class="player-elo" id="elo-w" hidden></span>
           <span class="player-count" id="count-w">16</span>
         </div>
+        <div class="card-augs" id="aug-w" hidden></div>
         <div class="tray" id="tray-w" aria-label="Pieces captured by White"></div>
       </section>
 
@@ -93,27 +169,16 @@
       <section class="panel">
         <div class="button-stack">
           <button id="btn-new" class="btn btn-primary" type="button">NEW GAME</button>
-          <button id="btn-campaign" class="btn btn-story" type="button">THE LONG GAME</button>
-          <button id="btn-mania" class="btn btn-mania" type="button">CHESKERS MANIA</button>
-          <button id="btn-ai" class="btn btn-accent" type="button">PLAY VS AI</button>
-          <button id="btn-online" class="btn btn-accent" type="button">PLAY ONLINE</button>
           <button id="btn-flip" class="btn" type="button">FLIP BOARD</button>
           <button id="btn-resign" class="btn btn-danger" type="button">RESIGN</button>
         </div>
       </section>
 
-      <section class="panel">
-        <h2 class="panel-title">RULES</h2>
-        <label class="toggle">
-          <input type="checkbox" id="opt-forced">
-          <span class="toggle-box"></span>
-          <span class="toggle-label">Forced jumps</span>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" id="opt-stuck" checked>
-          <span class="toggle-box"></span>
-          <span class="toggle-label">No moves = loss</span>
-        </label>
+      <section class="panel" id="mode-panel" hidden>
+        <h2 class="panel-title" id="mode-panel-title">MODE</h2>
+        <div class="button-stack">
+          <button id="btn-mode-action" class="btn btn-accent" type="button">OPEN</button>
+        </div>
       </section>
     </aside>
 
@@ -313,6 +378,12 @@
     <div id="lobby-home">
       <label class="field-label" for="lobby-name">YOUR NAME</label>
       <input id="lobby-name" class="field" type="text" maxlength="12" placeholder="PLAYER">
+
+      <label class="toggle lobby-toggle">
+        <input type="checkbox" id="lobby-mania">
+        <span class="toggle-box"></span>
+        <span class="toggle-label">Mania — roll random augments for both sides</span>
+      </label>
 
       <button id="lobby-create" class="btn btn-primary lobby-btn" type="button">
         CREATE ROOM

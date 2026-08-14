@@ -10,8 +10,10 @@ import { loadProgress, markCleared, resetProgress } from '../campaign/progress';
 import { augment } from '../engine/augments';
 import { DEFAULT_RULES, type Color, type Rules } from '../engine/types';
 import type { AiMatch, MatchResult } from './ai-match';
+import type { App } from './app';
 import { resetHorror, setHorror } from './horror';
 import { music } from './music';
+import { screens } from './screens';
 import { sound } from './sound';
 
 const el = <T extends HTMLElement>(id: string): T => {
@@ -46,17 +48,30 @@ export class Campaign {
     sceneAugments: el('scene-augments'),
   };
 
-  constructor(private readonly ai: AiMatch) {
+  constructor(
+    private readonly ai: AiMatch,
+    private readonly app: App,
+  ) {
     this.bind();
     this.renderList();
   }
 
   private bind(): void {
-    el('btn-campaign').addEventListener('click', () => {
+    el('mode-campaign').addEventListener('click', () => {
       sound.tick();
       this.renderList();
       this.dom.modal.hidden = false;
       this.dom.quit.hidden = this.active === null;
+    });
+
+    // The menu's back button tears every mode down; the campaign has horror
+    // state and a chapter in progress to clear.
+    window.addEventListener('cheskers:leave-modes', () => {
+      this.active = null;
+      this.dom.quit.hidden = true;
+      this.dom.scene.hidden = true;
+      this.queue = [];
+      this.onQueueDone = null;
     });
     this.dom.close.addEventListener('click', () => {
       sound.tick();
@@ -145,6 +160,19 @@ export class Campaign {
     this.dom.modal.hidden = true;
     this.dom.quit.hidden = false;
     setHorror(chapter.horror);
+    // Show the board behind the dialogue rather than the menu, so the scene
+    // reads as sitting down at a table.
+    screens.show('game');
+    this.app.setModeLabel(`${chapter.numeral} · ${chapter.name}`);
+    this.app.setModePanel({
+      title: 'THE LONG GAME',
+      action: 'CHAPTERS',
+      onClick: () => {
+        this.renderList();
+        this.dom.modal.hidden = false;
+        this.dom.quit.hidden = false;
+      },
+    });
     this.say(chapter, chapter.intro, () => this.startMatch(chapter));
   }
 
@@ -204,7 +232,10 @@ export class Campaign {
     this.dom.scene.hidden = true;
     resetHorror();
     this.ai.leave();
+    this.app.setModePanel(null);
+    this.app.setModeLabel('LOCAL GAME');
     music.enterMenu();
+    screens.show('menu');
   }
 
   // -------------------------------------------------------------------------

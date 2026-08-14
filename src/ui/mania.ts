@@ -20,6 +20,7 @@ import {
 } from '../engine/types';
 import type { App } from './app';
 import { music } from './music';
+import { screens } from './screens';
 import { sound } from './sound';
 
 const el = <T extends HTMLElement>(id: string): T => {
@@ -71,9 +72,15 @@ export class Mania {
   }
 
   private bind(): void {
-    el('btn-mania').addEventListener('click', () => {
+    el('mode-mania').addEventListener('click', () => {
       sound.tick();
       this.open();
+    });
+
+    window.addEventListener('cheskers:leave-modes', () => {
+      this.running = false;
+      this.dom.quit.hidden = true;
+      this.dom.modal.hidden = true;
     });
     this.dom.close.addEventListener('click', () => {
       sound.tick();
@@ -234,8 +241,14 @@ export class Mania {
       onEnd: (result) => this.finish(result),
       onRematch: () => this.beginMatch(),
     });
+    this.app.setModeLabel(`CHESKERS MANIA · ROUND ${this.round}`);
+    this.app.setModePanel({
+      title: 'MANIA',
+      action: 'END RUN',
+      onClick: () => this.quit(),
+    });
     this.app.showHint(
-      `MANIA ROUND ${this.round} — ${this.mine.length} AUGMENT${
+      `ROUND ${this.round} — ${this.mine.length} AUGMENT${
         this.mine.length === 1 ? '' : 'S'
       } HELD`,
     );
@@ -279,6 +292,9 @@ export class Mania {
     this.dom.quit.hidden = true;
     this.dom.modal.hidden = true;
     this.ai.leave();
+    this.app.setModePanel(null);
+    this.app.setModeLabel('LOCAL GAME');
     music.enterMenu();
+    screens.show('menu');
   }
 }

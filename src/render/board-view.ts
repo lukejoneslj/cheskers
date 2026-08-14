@@ -45,6 +45,11 @@ interface Visual {
   z: number;
   /** `royal_guard`: draw the ward ring under this piece. */
   shield: boolean;
+  /** Spare lives, veteran marks, and fuse left — drawn as pips above the
+   *  piece so a glance at the board tells you what each one is carrying. */
+  lives: number;
+  marks: number;
+  bomb: number;
 }
 
 export interface BoardCallbacks {
@@ -217,6 +222,9 @@ export class BoardView {
       flash: 0,
       z: 0,
       shield: piece.shield === true,
+      lives: piece.lives ?? 0,
+      marks: piece.marks ?? 0,
+      bomb: piece.bomb ?? 0,
     };
   }
 
@@ -412,6 +420,9 @@ export class BoardView {
       existing.sq = square;
       existing.key = spriteKey(piece);
       existing.shield = piece.shield === true;
+      existing.lives = piece.lives ?? 0;
+      existing.marks = piece.marks ?? 0;
+      existing.bomb = piece.bomb ?? 0;
       const p = this.centre(square);
       existing.x = p.x;
       existing.y = p.y;
@@ -631,6 +642,59 @@ export class BoardView {
       ctx.fillRect(Math.round(-w / 2), -h, w, h);
     }
     ctx.restore();
+
+    this.drawStatus(visual, anchorX, anchorY - sprite.h);
+  }
+
+  /** Lives, veteran marks and fuse, as three short rows of pips stacked above
+   *  the piece. Pips rather than numerals: at this scale a digit is four
+   *  pixels tall and unreadable, whereas a row of squares is countable. */
+  private drawStatus(visual: Visual, cx: number, topY: number): void {
+    const rows: Array<{ count: number; colour: string; blink: boolean }> = [];
+    if (visual.lives > 0) rows.push({ count: visual.lives, colour: '#5be7c4', blink: false });
+    if (visual.marks > 0) {
+      rows.push({ count: Math.min(visual.marks, 5), colour: palette.gold, blink: false });
+    }
+    if (visual.bomb > 0) {
+      // The last two turns blink, so a keg about to go off is impossible to
+      // miss even mid-game.
+      rows.push({ count: Math.min(visual.bomb, 6), colour: '#ff7b34', blink: visual.bomb <= 2 });
+    }
+    if (rows.length === 0) return;
+
+    const { ctx, scale } = this;
+    const pip = 2;
+    const gap = 1;
+    let y = topY - 2;
+    for (const row of rows) {
+      if (row.blink && Math.sin(this.clock * 12) < 0) {
+        y -= pip + gap;
+        continue;
+      }
+      const width = row.count * pip + (row.count - 1) * gap;
+      let x = cx - width / 2;
+      ctx.globalAlpha = visual.alpha;
+      for (let i = 0; i < row.count; i++) {
+        // A dark backing square keeps the pips readable over a light sprite.
+        ctx.fillStyle = 'rgba(8, 6, 10, 0.75)';
+        ctx.fillRect(
+          Math.round((x - 0.5) * scale),
+          Math.round((y - 0.5) * scale),
+          Math.round((pip + 1) * scale),
+          Math.round((pip + 1) * scale),
+        );
+        ctx.fillStyle = row.colour;
+        ctx.fillRect(
+          Math.round(x * scale),
+          Math.round(y * scale),
+          pip * scale,
+          pip * scale,
+        );
+        x += pip + gap;
+      }
+      ctx.globalAlpha = 1;
+      y -= pip + gap + 1;
+    }
   }
 
   /** The `royal_guard` ward: a pulsing ring of pixels around the king's base,

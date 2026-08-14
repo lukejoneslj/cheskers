@@ -11,11 +11,13 @@ Pixel art, hand-tuned animation, hotseat play, an AI opponent, a story
 campaign, a roguelike augment mode, and online play. Built as a static site:
 Vite + TypeScript, no framework, no backend of its own.
 
-A cinematic title screen opens the game, with a looping video backdrop and its
-own soundtrack; a white-flash transition hands off to the board. From there,
-music crossfades between a "selecting game mode" track while idle and two
-gameplay tracks that alternate for the duration of a match — the handoff
-starts a couple of seconds before each track ends so there's never a gap.
+Three screens, in order: a cinematic title with a looping video backdrop, a
+mode menu, then the board. A white-flash transition hands off from the title;
+the board screen carries only what you need mid-game, with a MENU button that
+tears down whatever mode was running. Music crossfades between a menu track
+and two gameplay tracks that alternate for the duration of a match — the
+handoff starts a couple of seconds before each track ends so there's never a
+gap.
 
 ---
 
@@ -83,7 +85,7 @@ round, so commons dry up and the cursed cards start showing.
 
 ## Augments
 
-Thirteen rule modifiers, each implemented inside the engine rather than
+Seventeen rule modifiers, each implemented inside the engine rather than
 bolted onto the UI — which is what lets the AI play with and against them
 with no special handling at all. They are granted per side, so "your checkers
 may retreat" never accidentally applies to your opponent.
@@ -103,6 +105,17 @@ may retreat" never accidentally applies to your opponent.
 | **AMAZON** | The queen also moves as a knight. |
 | **ROYAL GUARD** | The king turns aside the first attempt on it; the attacker dies. |
 | **BLOODCROWN** | Any checker that captures is crowned on the spot. |
+| **HEARTSTONE** | Every checker has a spare life; attacks bounce off. |
+| **VETERANCY** | Pieces bank kills: 2 earns a spare life, 3 earns a step any direction. |
+| **ASCENSION** | Each kill promotes the killer: checker → knight → bishop → rook → queen. |
+| **POWDER KEG** | One checker is armed. It levels every neighbour when taken, or in six turns. |
+
+The last four hang state on **individual pieces** rather than the side —
+`lives`, `marks` and `bomb` live on `Piece`, so a particular checker is the
+one carrying the keg and a particular rook is the one that has earned its
+second life. The board draws them as pips above the piece (cyan lives, gold
+kills, orange fuse, blinking in the last two turns), because a mechanic you
+cannot see is a mechanic you cannot plan around.
 
 `ROYAL GUARD` is the one worth explaining: a shielded king cannot simply be
 declared uncapturable without teaching the move generator a special case, so
@@ -110,9 +123,25 @@ instead the capture *resolves* — and the attacker is destroyed rather than
 taking the square, with the shield breaking on the way. Deterministic, pure,
 and the ward ring under the king makes it legible without a tooltip.
 
-Both modes are local-only by design. Online rooms still negotiate a classic
-ruleset, so an augmented board never reaches a peer that might disagree about
-what a move meant.
+### Mania online
+
+Ticking **Mania** when creating a room rolls three random augments per side
+and stores them in the room's ruleset. There is no synchronised draft
+protocol: the loadout is rolled once at creation, both clients read the same
+list, and their engines proceed identically from there.
+
+This works because *per-piece state is never sent over the wire*. The wire
+format is still only `{from, to, by}`. Whose checker is carrying the keg, how
+far the fuse has burned, which rook has banked two kills — all of it is
+re-derived by replaying the move log through the same deterministic engine on
+both sides. That is also why the keg starts on a fixed file rather than a
+random square: two clients independently building the opening position have
+to agree, and `Math.random()` would put them on different boards before the
+first move.
+
+Verified with two real clients on separate origins: identical loadouts,
+identical armed positions, and after a move each the fuse read 5 on both
+sides without a single byte of piece state crossing the network.
 
 ---
 
@@ -131,7 +160,7 @@ else still works.
 |---|---|
 | `npm run dev` | Dev server on :5173 |
 | `npm run build` | Type-check and build to `dist/` |
-| `npm test` | Unit tests — rules, augments, Elo, and the AI search (83) |
+| `npm test` | Unit tests — rules, augments, Elo, and the AI search (95) |
 | `npm run test:rules` | Security-rule tests against the live database (35) † |
 | `npm run sprites` | Re-cut sprites from `assets/` (needs Python + Pillow/NumPy) |
 
@@ -301,7 +330,7 @@ public/sprites/           16 transparent PNGs, one shared pixel grid
 public/video/             Title screen loop, re-encoded with audio stripped
 public/music/             Title, menu, and two alternating gameplay tracks
 public/sfx/               Recorded hit sounds for move/jump/capture/crown/click
-src/engine/               Pure rules + augments + Elo + AI search. No DOM. 83 tests.
+src/engine/               Pure rules + augments + Elo + AI search. No DOM. 95 tests.
 src/render/               Canvas renderer, tweens, particles, palette
 src/net/                  Firebase bootstrap, accounts, room sync
 src/campaign/             Chapter/NPC data and localStorage progress

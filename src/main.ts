@@ -4,6 +4,7 @@ import { App } from './ui/app';
 import { Campaign } from './ui/campaign';
 import { Lobby } from './ui/lobby';
 import { Mania } from './ui/mania';
+import { Menu } from './ui/menu';
 import { TitleScreen } from './ui/title';
 
 const app = new App();
@@ -24,8 +25,9 @@ app
 
     // The campaign and Mania are both AI matches with a wrapper around them,
     // so they drive the same match controller rather than a second one.
-    new Campaign(aiMatch);
+    new Campaign(aiMatch, app);
     new Mania(aiMatch, app);
+    new Menu(app, aiMatch, lobby);
   })
   .catch((error: unknown) => {
     console.error(error);
