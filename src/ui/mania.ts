@@ -45,6 +45,8 @@ export class Mania {
   private theirs: AugmentId[] = [];
   private offered: Augment[] = [];
   private playerColor: Color = 'w';
+  /** The round `questline` pays out at, once the player has drafted it. */
+  private questlineTarget: number | null = null;
 
   private readonly dom = {
     modal: el('mania-modal'),
@@ -52,6 +54,7 @@ export class Mania {
     draftPane: el('mania-draft'),
     cards: el('mania-cards'),
     round: el('mania-round'),
+    note: el('mania-note'),
     reply: el('mania-reply'),
     replyLabel: el('mania-reply-label'),
     replyCard: el('mania-reply-card'),
@@ -145,6 +148,7 @@ export class Mania {
     this.round = 0;
     this.mine = [];
     this.theirs = [];
+    this.questlineTarget = null;
     this.playerColor = Math.random() < 0.5 ? 'w' : 'b';
     this.dom.quit.hidden = false;
     this.nextRound();
@@ -152,21 +156,44 @@ export class Mania {
 
   private nextRound(): void {
     this.round++;
+
+    // `questline` pays out on its own schedule, ahead of the ordinary draft:
+    // holding it for two full rounds cashes it in for something better, and
+    // the quest itself is spent in the trade.
+    const questNote = this.settleQuestline();
+
     this.offered = draft(this.mine, 3, this.round);
     if (this.offered.length === 0) {
       // Every augment in the game is held. Play on without a draft.
       this.beginMatch();
       return;
     }
-    this.renderDraft();
+    this.renderDraft(questNote);
   }
 
-  private renderDraft(): void {
+  /** Resolve `questline` if its two-round wait is up. Returns a note to show
+   *  the player, or null if nothing happened this round. */
+  private settleQuestline(): string | null {
+    if (this.questlineTarget === null || this.round < this.questlineTarget) return null;
+    this.questlineTarget = null;
+    const held = this.mine.filter((id) => id !== 'questline');
+    // Weighted well past where cursed cards dominate, so the payout reliably
+    // reads as a reward rather than another common.
+    const payout = draft(held, 1, this.round + 6)[0];
+    this.mine = payout ? [...held, payout.id] : held;
+    return payout
+      ? `QUEST COMPLETE — your questline pays out ${payout.glyph} ${payout.name}.`
+      : 'QUEST COMPLETE — but you already hold everything it could have paid.';
+  }
+
+  private renderDraft(note: string | null = null): void {
     this.dom.modal.hidden = false;
     this.dom.intro.hidden = true;
     this.dom.over.hidden = true;
     this.dom.draftPane.hidden = false;
     this.dom.round.textContent = `ROUND ${this.round} — YOUR PICK`;
+    this.dom.note.hidden = !note;
+    this.dom.note.textContent = note ?? '';
 
     // Back to the picking half of the draft, in case the last thing on screen
     // was the previous round's reveal.
@@ -239,18 +266,52 @@ export class Mania {
     sound.tick();
     this.mine.push(choice.id);
 
+    // `questline` does not do anything itself -- it is a marker that starts
+    // a two-round clock, settled at the top of `nextRound`.
+    if (choice.id === 'questline') this.questlineTarget = this.round + 2;
+
+    // `gambler` resolves the instant it is drafted: one push-your-luck draw,
+    // blessing or curse decided on the spot rather than sitting in the
+    // loadout as a rule the engine has to know about.
+    const gambleNote = choice.id === 'gambler' ? this.resolveGamble() : null;
+
     // The opponent answers with one of its own, drawn from what is left. Its
     // pool excludes what it already holds but *not* what the player took --
     // both sides can end up running the same augment, which is fine.
     const reply = draft(this.theirs, 1, this.round)[0];
     if (reply) this.theirs.push(reply.id);
 
-    this.showReply(reply ?? null);
+    this.showReply(reply ?? null, gambleNote);
+  }
+
+  /** One draw of push-your-luck: two dealt totals, higher wins. A win drafts
+   *  a bonus augment on top of `gambler` itself, weighted well toward the
+   *  rare end of the pool since it is a reward, not an ordinary pick. A loss
+   *  or a push takes `gambler` back -- the bet is spent either way. */
+  private resolveGamble(): string {
+    const draw = () => 1 + Math.floor(Math.random() * 10) + 1 + Math.floor(Math.random() * 10);
+    const you = draw();
+    const dealer = draw();
+    const held = this.mine.filter((id) => id !== 'gambler');
+
+    if (you > dealer) {
+      const bonus = draft(held, 1, this.round + 6)[0];
+      this.mine = bonus ? [...held, 'gambler', bonus.id] : [...held, 'gambler'];
+      return bonus
+        ? `GAMBLER — you drew ${you} against ${dealer} and win ${bonus.glyph} ${bonus.name}!`
+        : `GAMBLER — you drew ${you} against ${dealer} and win, but hold everything already.`;
+    }
+    this.mine = held;
+    return you === dealer
+      ? `GAMBLER — you push at ${you} apiece. The bet is returned, table stays even.`
+      : `GAMBLER — you drew ${you} against ${dealer} and bust. The bet is gone.`;
   }
 
   /** Hold the draft open long enough to show what the opponent took. */
-  private showReply(reply: Augment | null): void {
+  private showReply(reply: Augment | null, note: string | null = null): void {
     this.dom.round.textContent = `ROUND ${this.round} — THEIR PICK`;
+    this.dom.note.hidden = !note;
+    this.dom.note.textContent = note ?? '';
     this.dom.cards.hidden = true;
     this.dom.reply.hidden = false;
     this.dom.go.hidden = false;
@@ -336,6 +397,7 @@ export class Mania {
     this.round = 0;
     this.mine = [];
     this.theirs = [];
+    this.questlineTarget = null;
     this.dom.quit.hidden = true;
     this.dom.modal.hidden = true;
     this.ai.leave();

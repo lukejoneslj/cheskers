@@ -63,12 +63,17 @@ export type AugmentId =
   | 'outrider_knight'
   | 'raider_knight'
   | 'missionary_bishop'
+  | 'warlord'
+  | 'swarm'
   // Consequences
   | 'royal_guard'
   | 'undying'
   | 'bloodcrown'
   | 'relentless'
   | 'reaping'
+  | 'stonewall'
+  | 'last_stand'
+  | 'bounty'
   // Per-piece: things that live on a single piece and change over a game
   | 'heartstone'
   | 'veterancy'
@@ -78,7 +83,14 @@ export type AugmentId =
   | 'ironclad'
   | 'gorge'
   | 'phalanx'
-  | 'martyr';
+  | 'martyr'
+  | 'grenadier'
+  | 'volatile'
+  // Chance and meta: driven by a deterministic roll, or by run progress
+  // rather than by the position on the board
+  | 'loaded_dice'
+  | 'gambler'
+  | 'questline';
 
 /** Which augments each side is playing with. */
 export type AugmentSet = Partial<Record<Color, ReadonlyArray<AugmentId>>>;

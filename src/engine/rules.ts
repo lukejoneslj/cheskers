@@ -60,6 +60,11 @@ const VETERAN_LIFE_AT = 2;
 const VETERAN_STEP_AT = 3;
 /** How many captures a side must bank before `reaping` raises a checker. */
 const REAPING_EVERY = 3;
+/** `grenadier`'s fuse: shorter than `powder_keg`'s, since a side gets two of
+ *  them and they start armed rather than being drafted onto a single piece. */
+const GRENADE_FUSE = 3;
+/** One in this many `volatile` checkers goes off when it is captured. */
+const VOLATILE_ODDS = 4;
 
 /** `ascension` walks a capturing piece up this ladder, one rung per kill. */
 const ASCENSION_LADDER: Partial<Record<Kind, Kind>> = {
@@ -70,6 +75,22 @@ const ASCENSION_LADDER: Partial<Record<Kind, Kind>> = {
 };
 
 export const at = (board: Board, s: Sq): Piece | null => board[s] ?? null;
+
+/** A deterministic stand-in for `Math.random()`, for augments that are
+ *  chance-based (`volatile`, `loaded_dice`). The engine has to stay a pure
+ *  function of state and move -- two network clients replay the same log and
+ *  must land on the same board -- so "random" here means hashed from data
+ *  both clients already agree on (move count, piece id, square), never from
+ *  the system clock or an RNG neither side can reproduce.
+ *
+ * Returns an integer in `[0, mod)`. */
+function chance(seed: number, mod: number): number {
+  let h = seed | 0;
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = (h ^ (h >>> 16)) >>> 0;
+  return h % mod;
+}
 
 const isEnemy = (p: Piece | null, color: Color): p is Piece =>
   p !== null && p.color !== color;
@@ -142,6 +163,19 @@ export function initialState(rules: Rules = DEFAULT_RULES): GameState {
       const kegSq = sq(rank, KEG_FILE);
       const carrier = board[kegSq];
       if (carrier) board[kegSq] = { ...carrier, bomb: FUSE_TURNS };
+    }
+
+    // `grenadier`: both rooks start armed on a short fuse. A blast does not
+    // check colour -- your own pieces can walk into a grenadier's radius as
+    // easily as the enemy's -- so it is a weapon you have to plan around
+    // owning, not just one to point at someone.
+    if (hasAugment(rules, color, 'grenadier')) {
+      for (let s = 0; s < 64; s++) {
+        const piece = board[s];
+        if (piece?.color === color && piece.kind === 'R') {
+          board[s] = { ...piece, bomb: GRENADE_FUSE };
+        }
+      }
     }
   }
 
@@ -244,12 +278,25 @@ function respawnSquare(board: Board, color: Color): Sq | null {
 // Move generation
 // ---------------------------------------------------------------------------
 
+/** `stonewall`: a checker cannot be captured by a chess piece's ordinary
+ *  move or slide -- only by another checker's hop (which `phalanx` guards
+ *  separately). A chess piece meeting one simply cannot pass or land there,
+ *  the same as running into its own side's piece. */
+function chessProof(defender: Piece | null, attacker: Color, rules: Rules): boolean {
+  return (
+    isEnemy(defender, attacker) &&
+    defender.kind === 'c' &&
+    hasAugment(rules, defender.color, 'stonewall')
+  );
+}
+
 function slide(
   board: Board,
   from: Sq,
   color: Color,
   dirs: ReadonlyArray<readonly [number, number]>,
   out: Move[],
+  rules: Rules,
 ): void {
   for (const [dr, dc] of dirs) {
     let r = row(from) + dr;
@@ -260,7 +307,7 @@ function slide(
       if (!cell) {
         out.push({ from, to, captured: null, isJump: false, promotes: false });
       } else {
-        if (isEnemy(cell, color)) {
+        if (isEnemy(cell, color) && !chessProof(cell, color, rules)) {
           out.push({ from, to, captured: to, isJump: false, promotes: false });
         }
         break;
@@ -277,6 +324,7 @@ function step(
   color: Color,
   offsets: ReadonlyArray<readonly [number, number]>,
   out: Move[],
+  rules: Rules,
 ): void {
   for (const [dr, dc] of offsets) {
     const r = row(from) + dr;
@@ -286,7 +334,7 @@ function step(
     const cell = at(board, to);
     if (!cell) {
       out.push({ from, to, captured: null, isJump: false, promotes: false });
-    } else if (isEnemy(cell, color)) {
+    } else if (isEnemy(cell, color) && !chessProof(cell, color, rules)) {
       out.push({ from, to, captured: to, isJump: false, promotes: false });
     }
   }
@@ -402,6 +450,38 @@ function flyingKingMoves(
   }
 }
 
+function pieceCount(board: Board, color: Color): number {
+  let n = 0;
+  for (let s = 0; s < 64; s++) if (at(board, s)?.color === color) n++;
+  return n;
+}
+
+/** `swarm`: a checker still on its own starting rank may open with a pawn-
+ *  style two-square advance, provided both the hop-over and landing squares
+ *  are empty. It is not a hop -- nothing is captured in transit -- so a
+ *  defender standing on the middle square blocks it outright. */
+function swarmMoves(board: Board, from: Sq, piece: Piece, rules: Rules, out: Move[]): void {
+  if (piece.kinged) return;
+  const homeRank = piece.color === 'w' ? 6 : 1;
+  if (row(from) !== homeRank) return;
+  const forward = piece.color === 'w' ? -1 : 1;
+  for (const dc of [1, -1]) {
+    const mr = row(from) + forward;
+    const mc = col(from) + dc;
+    if (!onBoard(mr, mc) || at(board, sq(mr, mc))) continue;
+    const lr = row(from) + forward * 2;
+    const lc = col(from) + dc * 2;
+    if (!onBoard(lr, lc) || at(board, sq(lr, lc))) continue;
+    out.push({
+      from,
+      to: sq(lr, lc),
+      captured: null,
+      isJump: false,
+      promotes: crowns(piece.color, lr, rules),
+    });
+  }
+}
+
 function checkerMoves(board: Board, from: Sq, piece: Piece, out: Move[], rules: Rules): void {
   if (piece.kinged && hasAugment(rules, piece.color, 'flying_kings')) {
     flyingKingMoves(board, from, piece, out, rules);
@@ -410,7 +490,11 @@ function checkerMoves(board: Board, from: Sq, piece: Piece, out: Move[], rules: 
 
   const forward = piece.color === 'w' ? -1 : 1;
   // A crowned man moves both ways; `backpedal` grants that to plain men too.
-  const wideOpen = piece.kinged || hasAugment(rules, piece.color, 'backpedal');
+  // `last_stand` grants it too, but only once a side is down to its final
+  // few pieces -- a mechanical second wind rather than a drafted trait.
+  const lastStand =
+    hasAugment(rules, piece.color, 'last_stand') && pieceCount(board, piece.color) <= 3;
+  const wideOpen = piece.kinged || hasAugment(rules, piece.color, 'backpedal') || lastStand;
   const dirs = [
     ...(wideOpen
       ? DIAGONAL
@@ -418,6 +502,8 @@ function checkerMoves(board: Board, from: Sq, piece: Piece, out: Move[], rules: 
     ...(hasAugment(rules, piece.color, 'flank') ? SIDEWAYS : []),
   ];
   hopMoves(board, from, piece, dirs, out, rules, true);
+
+  if (hasAugment(rules, piece.color, 'swarm')) swarmMoves(board, from, piece, rules, out);
 }
 
 /** Every pseudo-legal move for the piece on `from`, ignoring compulsory
@@ -433,32 +519,33 @@ export function movesForPiece(
   const own = piece.color;
   switch (piece.kind) {
     case 'R':
-      slide(board, from, own, ORTHOGONAL, out);
-      if (hasAugment(rules, own, 'siege_rook')) step(board, from, own, DIAGONAL, out);
+      slide(board, from, own, ORTHOGONAL, out, rules);
+      if (hasAugment(rules, own, 'siege_rook')) step(board, from, own, DIAGONAL, out, rules);
       break;
     case 'B':
-      slide(board, from, own, DIAGONAL, out);
+      slide(board, from, own, DIAGONAL, out, rules);
       if (hasAugment(rules, own, 'zealot_bishop')) {
         hopMoves(board, from, piece, DIAGONAL, out, rules, false);
       }
       if (hasAugment(rules, own, 'missionary_bishop')) {
-        step(board, from, own, ORTHOGONAL, out);
+        step(board, from, own, ORTHOGONAL, out, rules);
       }
       break;
     case 'Q':
-      slide(board, from, own, OMNI, out);
-      if (hasAugment(rules, own, 'amazon_queen')) step(board, from, own, KNIGHT, out);
+      slide(board, from, own, OMNI, out, rules);
+      if (hasAugment(rules, own, 'amazon_queen')) step(board, from, own, KNIGHT, out, rules);
       break;
     case 'N':
-      step(board, from, own, KNIGHT, out);
-      if (hasAugment(rules, own, 'outrider_knight')) step(board, from, own, OMNI, out);
+      step(board, from, own, KNIGHT, out, rules);
+      if (hasAugment(rules, own, 'outrider_knight')) step(board, from, own, OMNI, out, rules);
       if (hasAugment(rules, own, 'raider_knight')) {
         hopMoves(board, from, piece, OMNI, out, rules, false);
       }
       break;
     case 'K':
-      step(board, from, own, OMNI, out);
-      if (hasAugment(rules, own, 'blink_king')) step(board, from, own, LEAP2, out);
+      step(board, from, own, OMNI, out, rules);
+      if (hasAugment(rules, own, 'blink_king')) step(board, from, own, LEAP2, out, rules);
+      if (hasAugment(rules, own, 'warlord')) step(board, from, own, KNIGHT, out, rules);
       break;
     case 'c':
       checkerMoves(board, from, piece, out, rules);
@@ -472,7 +559,7 @@ export function movesForPiece(
     hasAugment(rules, own, 'veterancy') &&
     piece.kind !== 'K'
   ) {
-    step(board, from, own, OMNI, out);
+    step(board, from, own, OMNI, out, rules);
   }
   return out;
 }
@@ -557,13 +644,19 @@ export function applyMove(state: GameState, move: Move): GameState {
       chained: state.chain !== null,
       notation: `${label(mover)}${squareName(move.from)}✗${squareName(move.to)}`,
     };
-    return startTurn({
+    const guardedState: GameState = {
       ...state,
       board,
       history: [...state.history, guarded],
-      chain: null,
-      turn: other(state.turn),
-    });
+    };
+    // The piece destroyed for its trouble can itself be a King -- attack a
+    // shielded rook with your King and lose your King for it. That is a
+    // win for the shield's owner exactly like any other King capture, just
+    // delivered by the defender instead of the attacker.
+    if (mover.kind === 'K') {
+      return finish(guardedState, capturedPiece.color, 'king-capture');
+    }
+    return startTurn({ ...guardedState, chain: null, turn: other(state.turn) });
   }
 
   // A spare life turns the attack aside: the victim survives where it stands,
@@ -626,11 +719,20 @@ export function applyMove(state: GameState, move: Move): GameState {
   // Taking an armed piece sets it off where it stood -- which can easily take
   // the attacker with it. `powder_keg` arms one checker with a fuse; `martyr`
   // arms every checker a side owns, with no fuse at all, so they only ever go
-  // off in someone else's hands.
+  // off in someone else's hands. `volatile` is the unstable cousin: no owner
+  // chooses when it goes off -- every checker has a one-in-`VOLATILE_ODDS`
+  // chance of detonating the moment it dies, decided by a hash of the capture
+  // itself so both network clients land on the same answer without either one
+  // sending a coin flip over the wire.
+  const volatileRoll =
+    capturedPiece?.kind === 'c' &&
+    hasAugment(rules, capturedPiece.color, 'volatile') &&
+    chance(capturedPiece.id * 2654435761 + state.history.length, VOLATILE_ODDS) === 0;
   const victimExplodes =
     capturedPiece !== null &&
     (capturedPiece.bomb !== undefined ||
-      (capturedPiece.kind === 'c' && hasAugment(rules, capturedPiece.color, 'martyr')));
+      (capturedPiece.kind === 'c' && hasAugment(rules, capturedPiece.color, 'martyr')) ||
+      volatileRoll);
   if (victimExplodes && capturedPiece && move.captured !== null) {
     detonate(board, move.captured);
     const ended = settleAfterBlast(state, board);
@@ -707,6 +809,22 @@ export function applyMove(state: GameState, move: Move): GameState {
     }
   }
 
+  // `bounty`: every chess piece you take (not a checker -- those are what
+  // `reaping` rewards, and not a King -- that already ends the game below)
+  // raises a fresh man immediately, no counting required.
+  if (
+    move.captured !== null &&
+    capturedPiece &&
+    capturedPiece.kind !== 'c' &&
+    capturedPiece.kind !== 'K' &&
+    hasAugment(rules, mover.color, 'bounty')
+  ) {
+    const home = respawnSquare(board, mover.color);
+    if (home !== null) {
+      board[home] = { kind: 'c', color: mover.color, kinged: false, id: nextId++ };
+    }
+  }
+
   const record: MoveRecord = {
     ...move,
     promotes,
@@ -745,12 +863,42 @@ export function applyMove(state: GameState, move: Move): GameState {
 
 export const other = (c: Color): Color => (c === 'w' ? 'b' : 'w');
 
+/** `loaded_dice`: a d10 rolled at the top of every one of the augment
+ *  owner's turns, hashed from the move count so both clients agree on the
+ *  face without either one transmitting it. A 10 blesses one of the side's
+ *  own checkers with a spare life; a 1 costs a random checker of theirs one,
+ *  if any has one to lose. Anything in between is just the roll -- shown so
+ *  the tension is real, resolving to nothing. */
+function rollDice(state: GameState): GameState {
+  if (!hasAugment(state.rules, state.turn, 'loaded_dice')) return state;
+  const face = chance(state.history.length * 2654435761 + 97, 10) + 1;
+  if (face !== 1 && face !== 10) return state;
+
+  const owned: Sq[] = [];
+  state.board.forEach((p, s) => {
+    if (p?.color === state.turn && p.kind === 'c') owned.push(s);
+  });
+  if (owned.length === 0) return state;
+  const target = owned[chance(state.history.length * 40503 + 13, owned.length)]!;
+
+  const board = state.board.slice() as (Piece | null)[];
+  const piece = board[target]!;
+  if (face === 10) {
+    board[target] = { ...piece, lives: (piece.lives ?? 0) + 1 };
+  } else if ((piece.lives ?? 0) > 0) {
+    board[target] = { ...piece, lives: (piece.lives ?? 0) - 1 };
+  } else {
+    return state; // nothing to take -- the roll stands but changes nothing
+  }
+  return { ...state, board };
+}
+
 /** Settle the position at the start of a turn: if the side to move is stuck,
  *  decide the game per the ruleset. */
 function startTurn(state: GameState): GameState {
   // Fuses burn down before the side to move gets to act, so an armed piece
   // cannot be walked out of trouble on the very turn it was due to go off.
-  const ticked = tickBombs(state);
+  const ticked = rollDice(tickBombs(state));
   if (ticked.status === 'over') return ticked;
   if (legalMoves(ticked).length > 0) return ticked;
   return ticked.rules.lossOnNoMoves

@@ -1275,6 +1275,17 @@ select.field {
 
 /* The opponent's answering pick ------------------------------------------ */
 
+.mania-note {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  line-height: 1.5;
+  color: var(--gold);
+  background: var(--ink-soft);
+  border: 2px solid var(--gold);
+}
+
 .mania-reply-label {
   margin: 0 0 10px;
   font-size: 8px;

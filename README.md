@@ -78,18 +78,21 @@ names stay hidden until they are reachable.
 
 ## Cheskers Mania
 
-A run. Before every round you draft one augment from three; the opponent then
-draws one of its own, which the draft screen shows you before the round
-begins. Win to draft again, lose once and the run is over. The draft is
-weighted by round, so commons dry up and the cursed cards start showing.
+A run. Before every round you draft one augment from three — always at least
+two commons and one wildcard, so a draft is never a coin flip on getting any
+playable card at all. The opponent then draws one of its own, which the draft
+screen shows you before the round begins. Win to draft again, lose once and
+the run is over. The wildcard slot is weighted by round, so cursed cards
+start crowding out commons the deeper you go.
 
 Both loadouts are also printed on the player cards for the whole game, in
-every mode that has augments — you should never have to work out what your
-opponent is running from a move you did not think was legal.
+every mode that has augments, name spelled out next to the glyph — and every
+chip is hoverable for its one-line rule. You should never have to work out
+what your opponent is running from a move you did not think was legal.
 
 ## Augments
 
-Twenty-five rule modifiers, each implemented inside the engine rather than
+Thirty-five rule modifiers, each implemented inside the engine rather than
 bolted onto the UI — which is what lets the AI play with and against them
 with no special handling at all. They are granted per side, so "your checkers
 may retreat" never accidentally applies to your opponent.
@@ -102,6 +105,8 @@ may retreat" never accidentally applies to your opponent.
 | **SIEGE ENGINE** | Rooks also step one square diagonally. |
 | **OUTRIDERS** | Knights also step one square in any direction. |
 | **MISSIONARIES** | Bishops also step one square orthogonally. |
+| **WARLORD** | The king also moves as a knight. |
+| **SWARM** | Checkers on their home rank may open two squares at once. |
 | **RELENTLESS** | Crowning no longer ends a jump chain. |
 | **ZEALOTS** | Bishops hop adjacent enemies like checkers — and chain. |
 | **RAIDERS** | Knights hop adjacent enemies any direction — and chain. |
@@ -110,6 +115,11 @@ may retreat" never accidentally applies to your opponent.
 | **AEGIS** | Both rooks turn aside the first attempt on them; the attacker dies. |
 | **PHALANX** | Checkers standing beside another of yours cannot be hopped. |
 | **REAPING** | Every third piece you take raises a fresh man on your home rank. |
+| **STONEWALL** | Checkers cannot be captured by a chess piece — only by a hop. |
+| **BOUNTY** | Taking any chess piece raises a fresh checker on your home rank. |
+| **LAST STAND** | Down to 3 pieces or fewer, your checkers can move and hop any way. |
+| **GRENADIER** | Both rooks arm on a 3-turn fuse; the blast hits friend and foe. |
+| **GAMBLER** | Drafting this deals one hand of blackjack for a prize, or a price. |
 | **FLYING KINGS** | Crowned checkers slide any distance and take from range. |
 | **AMAZON** | The queen also moves as a knight. |
 | **ROYAL GUARD** | The king turns aside the first attempt on it; the attacker dies. |
@@ -121,8 +131,11 @@ may retreat" never accidentally applies to your opponent.
 | **ASCENSION** | Each kill promotes the killer: checker → knight → bishop → rook → queen. |
 | **POWDER KEG** | One checker is armed. It levels every neighbour when taken, or in six turns. |
 | **MARTYRS** | Every checker levels its neighbours when it is taken. |
+| **VOLATILE** | Every checker has a 1-in-4 chance to blow its neighbourhood when killed. |
+| **LOADED DICE** | Roll a d10 each of your turns: a 10 blesses a checker, a 1 costs one a life. |
+| **QUESTLINE** | Survive two more rounds holding this and it pays out a strong augment, free. |
 
-Nine of them hang state on **individual pieces** rather than the side —
+Eleven of them hang state on **individual pieces** rather than the side —
 `lives`, `marks`, `shield` and `bomb` live on `Piece`, so a particular checker
 is the one carrying the keg and a particular rook is the one that has earned
 its second life. The board draws them as pips above the piece (cyan lives,
@@ -132,7 +145,11 @@ you cannot see is a mechanic you cannot plan around.
 None of this state ever crosses the wire. Online, the move format stays
 `{from, to, by}` and both clients re-derive every fuse, life and mark by
 replaying the log — which is why the keg starts on a fixed file rather than a
-random square.
+random square. `VOLATILE` and `LOADED DICE` are chance-based but still fit
+this rule: rather than call `Math.random()`, they hash a hidden die roll out
+of data both clients already agree on (piece id, move count), so the "random"
+outcome replays identically on both ends without either one sending a coin
+flip over the wire.
 
 `ROYAL GUARD` is the one worth explaining: a shielded king cannot simply be
 declared uncapturable without teaching the move generator a special case, so
@@ -140,7 +157,16 @@ instead the capture *resolves* — and the attacker is destroyed rather than
 taking the square, with the shield breaking on the way. Deterministic, pure,
 and the ward ring under the king makes it legible without a tooltip. `AEGIS`
 is the same mechanic pointed at the rooks, and needed no new code beyond
-dropping the "king only" condition.
+dropping the "king only" condition. That destroyed attacker can itself be a
+King — attack a shielded rook with your own King and lose it for nothing —
+and that has to end the game exactly like any other King capture; an early
+build of this feature missed that case and let the loser play on with no
+King at all.
+
+`GAMBLER` and `QUESTLINE` are the two that live outside the engine entirely:
+they resolve inside the Mania draft screen rather than inside `rules.ts`,
+since a one-shot card draw or a two-round countdown is meta-progression for
+the run, not a rule the board itself needs to know about.
 
 ### Mania online
 
@@ -179,7 +205,7 @@ else still works.
 |---|---|
 | `npm run dev` | Dev server on :5173 |
 | `npm run build` | Type-check and build to `dist/` |
-| `npm test` | Unit tests — rules, augments, Elo, and the AI search (108) |
+| `npm test` | Unit tests — rules, augments, Elo, and the AI search (126) |
 | `npm run test:rules` | Security-rule tests against the live database (35) † |
 | `npm run sprites` | Re-cut sprites from `assets/` (needs Python + Pillow/NumPy) |
 
@@ -349,7 +375,7 @@ public/sprites/           16 transparent PNGs, one shared pixel grid
 public/video/             Title screen loop, re-encoded with audio stripped
 public/music/             Title, menu, and two alternating gameplay tracks
 public/sfx/               Recorded hit sounds for move/jump/capture/crown/click
-src/engine/               Pure rules + augments + Elo + AI search. No DOM. 108 tests.
+src/engine/               Pure rules + augments + Elo + AI search. No DOM. 126 tests.
 src/render/               Canvas renderer, tweens, particles, palette
 src/net/                  Firebase bootstrap, accounts, room sync
 src/campaign/             Chapter/NPC data and localStorage progress

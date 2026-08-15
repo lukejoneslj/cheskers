@@ -72,6 +72,28 @@ describe('catalogue', () => {
     expect(draft(held, 3, 1)).toHaveLength(2);
     expect(draft(AUGMENTS.map((a) => a.id), 3, 1)).toHaveLength(0);
   });
+
+  it('always deals at least two commons in a draft of three', () => {
+    // Weighted by round alone, a high-round draft could hand over three
+    // cursed cards and nothing playable. Run it a lot of times, at the round
+    // that weights commons lowest, and demand the floor holds every time.
+    for (let i = 0; i < 60; i++) {
+      const dealt = draft([], 3, 6);
+      const commons = dealt.filter((a) => a.rarity === 'common').length;
+      expect(commons).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('does not force commons on a single-card deal', () => {
+    // The opponent's reply in Mania is `draft(held, 1, round)` -- a floor of
+    // two commons would be meaningless there, so a one-card draft should be
+    // able to come back with anything, rare or cursed included.
+    const rarities = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      rarities.add(draft([], 1, 6)[0]!.rarity);
+    }
+    expect(rarities.size).toBeGreaterThan(1);
+  });
 });
 
 describe('movement augments', () => {
@@ -453,6 +475,23 @@ describe('aegis', () => {
     expect(game.history.at(-1)?.capturedKind).toBeNull();
     expect(game.history.at(-1)?.captured).toBeNull();
   });
+
+  it('ends the game when the destroyed attacker is itself a King', () => {
+    // A King attacking a shielded rook loses itself, not the rook -- that has
+    // to end the game the same as any other King capture, or the loser is
+    // left playing on with no King at all.
+    const s = position({ d4: 'wK', d5: 'bR', a8: 'wR', h8: 'bK' });
+    const board = s.board.slice() as (Piece | null)[];
+    board[S('d5')] = { ...board[S('d5')]!, shield: true };
+    const game: GameState = { ...s, board };
+
+    const after = applyMove(game, findMove(game, S('d4'), S('d5'))!);
+    expect(at(after.board, 'd4')).toBeNull();       // the White King is gone
+    expect(at(after.board, 'd5')?.shield).toBe(false);
+    expect(after.status).toBe('over');
+    expect(after.winner).toBe('b');
+    expect(after.winReason).toBe('king-capture');
+  });
 });
 
 describe('phalanx', () => {
@@ -549,6 +588,173 @@ describe('martyr', () => {
     const after = applyMove(s, findMove(s, S('d4'), S('f6'))!);
     expect(at(after.board, 'f6')?.kind).toBe('c'); // ordinary hop, no blast
     expect(at(after.board, 'd6')?.kind).toBe('N');
+  });
+});
+
+describe('warlord', () => {
+  it('lets the king also move like a knight', () => {
+    const plain = position({ d4: 'wK' });
+    expect(targets(legalMovesFrom(plain, S('d4')))).not.toContain('f5');
+
+    const s = position({ d4: 'wK' }, { rules: rules(['warlord']) });
+    const reach = targets(legalMovesFrom(s, S('d4')));
+    expect(reach).toContain('f5'); // knight hop
+    expect(reach).toContain('d5'); // still an ordinary king step
+  });
+});
+
+describe('swarm', () => {
+  it('lets a home-rank checker open two squares', () => {
+    const s = position({ d2: 'wc' }, { rules: rules(['swarm']) });
+    expect(targets(legalMovesFrom(s, S('d2')))).toEqual(
+      expect.arrayContaining(['b4', 'f4', 'c3', 'e3']),
+    );
+  });
+
+  it('does not grant the double step off the home rank', () => {
+    const s = position({ d3: 'wc' }, { rules: rules(['swarm']) });
+    expect(targets(legalMovesFrom(s, S('d3')))).toEqual(['c4', 'e4']);
+  });
+
+  it('is blocked by a piece on the middle square, like a real pawn double-step', () => {
+    // The middle square of the double-step is the same square an ordinary
+    // hop would jump over, so blocking it with an *enemy* piece would only
+    // offer a capture instead of testing the block. Use a friendly piece,
+    // which cannot be hopped and cannot be stepped onto either.
+    const s = position({ d2: 'wc', c3: 'wN' }, { rules: rules(['swarm']) });
+    expect(targets(legalMovesFrom(s, S('d2')))).not.toContain('b4');
+    expect(targets(legalMovesFrom(s, S('d2')))).toContain('f4');
+  });
+});
+
+describe('stonewall', () => {
+  it('stops a chess piece from capturing the checker outright', () => {
+    const plain = position({ b2: 'wB', e5: 'bc' });
+    expect(targets(legalMovesFrom(plain, S('b2')))).toContain('e5');
+
+    const s = position({ b2: 'wB', e5: 'bc' }, { rules: rules([], ['stonewall']) });
+    expect(targets(legalMovesFrom(s, S('b2')))).not.toContain('e5');
+    // The bishop cannot slide past it either -- it is a wall, not a ghost.
+    expect(targets(legalMovesFrom(s, S('b2')))).not.toContain('f6');
+  });
+
+  it('does not stop a checker hop', () => {
+    const s = position({ d4: 'wc', e5: 'bc' }, { rules: rules([], ['stonewall']) });
+    expect(targets(legalMovesFrom(s, S('d4')))).toContain('f6');
+  });
+});
+
+describe('last stand', () => {
+  const augmentedRules = rules(['last_stand']);
+
+  it('does nothing while a side still has more than three pieces', () => {
+    const s = position({ d4: 'wc', a1: 'wK', a2: 'wR', a3: 'wN', h8: 'bK' }, {
+      rules: augmentedRules,
+    });
+    expect(targets(legalMovesFrom(s, S('d4')))).toEqual(['c5', 'e5']);
+  });
+
+  it('grants backwards movement once a side is down to three pieces or fewer', () => {
+    const s = position({ d4: 'wc', a1: 'wK', h8: 'bK' }, { rules: augmentedRules });
+    const reach = targets(legalMovesFrom(s, S('d4')));
+    expect(reach).toContain('c5');
+    expect(reach).toContain('e5');
+  });
+});
+
+describe('bounty', () => {
+  it('raises a checker for every chess piece taken', () => {
+    const s = position({ d4: 'wR', d5: 'bN', a1: 'wK', h8: 'bK' }, {
+      rules: rules(['bounty']),
+    });
+    const after = applyMove(s, findMove(s, S('d4'), S('d5'))!);
+    const raised = after.board.filter((p) => p?.color === 'w' && p.kind === 'c');
+    expect(raised).toHaveLength(1);
+  });
+
+  it('does not fire on a checker capture', () => {
+    const s = position({ d4: 'wR', d5: 'bc', a1: 'wK', h8: 'bK' }, {
+      rules: rules(['bounty']),
+    });
+    const after = applyMove(s, findMove(s, S('d4'), S('d5'))!);
+    expect(after.board.filter((p) => p?.color === 'w' && p.kind === 'c')).toHaveLength(0);
+  });
+});
+
+describe('grenadier', () => {
+  it('arms both rooks at the start with a short fuse', () => {
+    const s = initialState(rules(['grenadier']));
+    const armed = s.board.filter((p) => p?.color === 'w' && p.bomb !== undefined);
+    expect(armed).toHaveLength(2);
+    expect(armed.every((p) => p!.kind === 'R' && p!.bomb === 3)).toBe(true);
+  });
+
+  it('levels its own side along with the enemy when the fuse runs out', () => {
+    const s = position(
+      { d4: 'wR', e5: 'wN', a1: 'wK', h8: 'bK', a8: 'bc' },
+      {},
+    );
+    const board = s.board.slice() as (Piece | null)[];
+    board[S('d4')] = { ...board[S('d4')]!, bomb: 1 };
+    let game: GameState = { ...s, board, turn: 'b' };
+    // Black moves; the fuse ticks to zero as white's turn opens and detonates
+    // before white gets to act, catching white's own knight beside it.
+    game = applyMove(game, findMove(game, S('a8'), S('b7'))!);
+    expect(at(game.board, 'd4')).toBeNull();
+    expect(at(game.board, 'e5')).toBeNull();
+  });
+});
+
+describe('volatile', () => {
+  it('sometimes levels the neighbourhood when a checker is taken, over many trials', () => {
+    // The roll is deterministic per (piece id, move count), not per real call
+    // to Math.random -- so sweep a range of ids to see both outcomes turn up
+    // rather than asserting on any single one.
+    const layout = { d4: 'wR', d5: 'bc', d6: 'bN', a1: 'wK', h8: 'bK' };
+    let blewUp = false;
+    let didNot = false;
+    for (let id = 0; id < 40; id++) {
+      const s = position(layout, { rules: rules([], ['volatile']) });
+      const board = s.board.slice() as (Piece | null)[];
+      board[S('d5')] = { ...board[S('d5')]!, id };
+      const game: GameState = { ...s, board };
+      const after = applyMove(game, findMove(game, S('d4'), S('d5'))!);
+      if (at(after.board, 'd6') === null) blewUp = true;
+      else didNot = true;
+    }
+    expect(blewUp).toBe(true);
+    expect(didNot).toBe(true);
+  });
+});
+
+describe('loaded dice', () => {
+  it('never fires for a side without the augment', () => {
+    let s = position({ d4: 'wR', a1: 'wK', h8: 'bK', a8: 'bc' });
+    for (let i = 0; i < 12; i++) {
+      const move = legalMovesFrom(s, s.turn === 'w' ? S('d4') : S('a8'))[0];
+      if (!move) break;
+      s = applyMove(s, move);
+    }
+    expect(s.board.some((p) => (p?.lives ?? 0) > 0)).toBe(false);
+  });
+
+  it('only ever touches a checker belonging to the side that rolled', () => {
+    // Shuttle the kings back and forth for a while with white holding
+    // loaded_dice and a couple of checkers sitting idle on each side, and
+    // confirm any life swings landed only on white's own checkers -- the
+    // roll is white's business, never black's.
+    let s = position(
+      { a1: 'wK', h8: 'bK', c3: 'wc', b3: 'wc', f6: 'bc', g6: 'bc' },
+      { rules: rules(['loaded_dice']) },
+    );
+    for (let i = 0; i < 24 && s.status === 'playing'; i++) {
+      const from = s.turn === 'w' ? S('a1') : S('h8');
+      const legal = legalMovesFrom(s, from);
+      const move = legal[i % legal.length];
+      if (!move) break;
+      s = applyMove(s, move);
+    }
+    expect(s.board.some((p) => p?.color === 'b' && (p.lives ?? 0) > 0)).toBe(false);
   });
 });
 

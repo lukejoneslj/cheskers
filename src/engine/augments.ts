@@ -64,6 +64,20 @@ export const AUGMENTS: ReadonlyArray<Augment> = [
     glyph: '✝',
   },
   {
+    id: 'warlord',
+    name: 'WARLORD',
+    blurb: 'Your king also moves as a knight.',
+    rarity: 'common',
+    glyph: '♞',
+  },
+  {
+    id: 'swarm',
+    name: 'SWARM',
+    blurb: 'Checkers on their home rank may open with a two-square advance.',
+    rarity: 'common',
+    glyph: '⏩',
+  },
+  {
     id: 'relentless',
     name: 'RELENTLESS',
     blurb: 'Crowning no longer ends your jump chain. Keep going.',
@@ -134,6 +148,41 @@ export const AUGMENTS: ReadonlyArray<Augment> = [
     glyph: '⚱',
   },
   {
+    id: 'stonewall',
+    name: 'STONEWALL',
+    blurb: 'Your checkers cannot be captured by a chess piece — only by a hop.',
+    rarity: 'rare',
+    glyph: '🧱',
+  },
+  {
+    id: 'bounty',
+    name: 'BOUNTY',
+    blurb: 'Taking any chess piece raises a fresh checker on your home rank.',
+    rarity: 'rare',
+    glyph: '⚜',
+  },
+  {
+    id: 'last_stand',
+    name: 'LAST STAND',
+    blurb: 'Down to 3 pieces or fewer, your checkers can move and hop any way.',
+    rarity: 'rare',
+    glyph: '🚩',
+  },
+  {
+    id: 'grenadier',
+    name: 'GRENADIER',
+    blurb: 'Both your rooks arm on a 3-turn fuse. The blast hits friend and foe alike.',
+    rarity: 'rare',
+    glyph: '💥',
+  },
+  {
+    id: 'gambler',
+    name: 'GAMBLER',
+    blurb: 'Drafting this deals you into one hand of blackjack for a prize — or a price.',
+    rarity: 'rare',
+    glyph: '🂡',
+  },
+  {
     id: 'flying_kings',
     name: 'FLYING KINGS',
     blurb: 'Your crowned checkers slide any distance and take from range.',
@@ -196,6 +245,27 @@ export const AUGMENTS: ReadonlyArray<Augment> = [
     rarity: 'cursed',
     glyph: '✹',
   },
+  {
+    id: 'volatile',
+    name: 'VOLATILE',
+    blurb: 'Every checker of yours has a 1-in-4 chance to blow its neighbourhood when killed.',
+    rarity: 'cursed',
+    glyph: '☢',
+  },
+  {
+    id: 'loaded_dice',
+    name: 'LOADED DICE',
+    blurb: 'Roll a d10 each of your turns: a 10 blesses a checker, a 1 costs one a life.',
+    rarity: 'cursed',
+    glyph: '🎲',
+  },
+  {
+    id: 'questline',
+    name: 'QUESTLINE',
+    blurb: 'Survive two more rounds holding this and it pays out a powerful augment, free.',
+    rarity: 'cursed',
+    glyph: '📜',
+  },
 ];
 
 const BY_ID = new Map(AUGMENTS.map((a) => [a.id, a]));
@@ -227,9 +297,18 @@ export function rollLoadout(count: number): AugmentSet {
   return set;
 }
 
+/** How many of a draft's cards are guaranteed common, floor kept low. A card
+ *  you can always predict the shape of is what makes the wildcard slot feel
+ *  like a wildcard rather than a coin flip on whether you get to play at all. */
+const GUARANTEED_COMMONS = 2;
+
 /** Deal `count` distinct augments the player does not already hold.
- *  Later rounds weight the draft toward the nastier end of the pool, so a run
- *  visibly escalates rather than staying flat. */
+ *
+ * When there is room for it (`count` is at least `GUARANTEED_COMMONS + 1`),
+ * the first cards are always common and only the remainder is weighted --
+ * so a draft of three is never a coin flip on getting *any* playable card,
+ * and the one wildcard slot is where the run's escalation actually shows up.
+ * Later rounds weight that wildcard toward the nastier end of the pool. */
 export function draft(
   held: ReadonlyArray<AugmentId>,
   count: number,
@@ -244,17 +323,28 @@ export function draft(
 
   const picked: Augment[] = [];
   const remaining = [...pool];
-  while (picked.length < count && remaining.length > 0) {
-    const total = remaining.reduce((n, a) => n + weight(a), 0);
+
+  const takeWeighted = (from: Augment[]): number => {
+    const total = from.reduce((n, a) => n + weight(a), 0);
     let roll = Math.random() * total;
-    let index = remaining.length - 1;
-    for (let i = 0; i < remaining.length; i++) {
-      roll -= weight(remaining[i]!);
-      if (roll <= 0) {
-        index = i;
-        break;
-      }
+    for (let i = 0; i < from.length; i++) {
+      roll -= weight(from[i]!);
+      if (roll <= 0) return i;
     }
+    return from.length - 1;
+  };
+
+  const guaranteed = count > GUARANTEED_COMMONS ? GUARANTEED_COMMONS : 0;
+  while (picked.length < guaranteed) {
+    const commons = remaining.filter((a) => a.rarity === 'common');
+    if (commons.length === 0) break; // pool has run dry of commons; fall through
+    const choice = commons[Math.floor(Math.random() * commons.length)]!;
+    picked.push(choice);
+    remaining.splice(remaining.indexOf(choice), 1);
+  }
+
+  while (picked.length < count && remaining.length > 0) {
+    const index = takeWeighted(remaining);
     picked.push(remaining[index]!);
     remaining.splice(index, 1);
   }
