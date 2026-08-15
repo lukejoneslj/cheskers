@@ -963,6 +963,53 @@ select.field {
 
 .lobby-toggle { margin: 4px 0 2px; }
 
+/* The online-lobby Mania toggle -- a checkbox tucked into a plain text row
+   was easy to create a room without ever noticing. It now reads as its own
+   card, coloured to match the Mania mode-card on the menu, so ticking it is
+   a decision rather than something you scroll past. */
+.mania-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 16px;
+  padding: 10px 12px;
+  background: var(--ink-soft);
+  border: var(--bd) solid var(--edge);
+  border-left: 6px solid #e07a4a;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.mania-toggle:hover { background: var(--panel-hi); }
+.mania-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.mania-toggle-box {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  background: var(--ink);
+  border: 2px solid var(--edge);
+  position: relative;
+}
+.mania-toggle-check {
+  position: absolute;
+  inset: 3px;
+  background: #e07a4a;
+  opacity: 0;
+  transition: opacity 80ms;
+}
+.mania-toggle input:checked ~ .mania-toggle-box .mania-toggle-check { opacity: 1; }
+.mania-toggle input:checked ~ .mania-toggle-box { border-color: #e07a4a; }
+.mania-toggle input:focus-visible ~ .mania-toggle-box { outline: 2px solid var(--gold); }
+.mania-toggle input:checked ~ .mania-toggle-text .mania-toggle-title { color: #e07a4a; }
+.mania-toggle-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mania-toggle-title {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--cream);
+  transition: color 120ms;
+}
+.mania-toggle-blurb { font-size: 8px; line-height: 1.4; color: var(--muted); }
+.mania-toggle:has(input:checked) { border-color: #e07a4a; }
+
 /* --------------------------------------------------------------------- */
 /* Campaign — chapter select                                              */
 /* --------------------------------------------------------------------- */
