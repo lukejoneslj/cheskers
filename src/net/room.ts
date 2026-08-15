@@ -14,7 +14,7 @@
  */
 
 import { findMove } from '../engine/rules';
-import type { Color, GameState, Move, Rules } from '../engine/types';
+import type { AugmentId, Color, GameState, Move, Rules } from '../engine/types';
 import { connect, currentUid } from './firebase';
 
 export type Seat = Color | 'spectator';
@@ -256,6 +256,24 @@ export class Room {
     const { db } = await connect();
     const { ref, update } = await import('firebase/database');
     await update(ref(db, `rooms/${this.code}`), { status });
+  }
+
+  /** Append one more augment to the local seat's own loadout -- used to
+   *  escalate an online Mania room on rematch instead of only ever replaying
+   *  the same three augments. A transaction, not a plain write: two rapid
+   *  clicks (or a retried request) must not both land and double the grant.
+   *  Database rules enforce that only this seat's own colour is writable and
+   *  that no existing entry can be overwritten, only appended to. */
+  async addAugment(id: AugmentId): Promise<void> {
+    if (this.seat === 'spectator') return;
+    const seat = this.seat;
+    const { db } = await connect();
+    const { ref, runTransaction } = await import('firebase/database');
+    await runTransaction(ref(db, `rooms/${this.code}/rules/augments/${seat}`), (current) => {
+      const held: string[] = Array.isArray(current) ? current : [];
+      if (held.includes(id)) return held; // already there; leave it alone
+      return [...held, id];
+    });
   }
 
   /** Ask for a rematch. When both seats have asked, the board is cleared and

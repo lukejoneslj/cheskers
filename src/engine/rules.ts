@@ -868,29 +868,41 @@ export const other = (c: Color): Color => (c === 'w' ? 'b' : 'w');
  *  face without either one transmitting it. A 10 blesses one of the side's
  *  own checkers with a spare life; a 1 costs a random checker of theirs one,
  *  if any has one to lose. Anything in between is just the roll -- shown so
- *  the tension is real, resolving to nothing. */
+ *  the tension is real, resolving to nothing.
+ *
+ * The roll is recorded on `state.lastRoll` every time it happens, face 2-9
+ * included, so the UI has something to show for every turn the augment is
+ * held rather than only the two faces that do anything. */
 function rollDice(state: GameState): GameState {
-  if (!hasAugment(state.rules, state.turn, 'loaded_dice')) return state;
+  if (!hasAugment(state.rules, state.turn, 'loaded_dice')) {
+    return state.lastRoll ? { ...state, lastRoll: null } : state;
+  }
   const face = chance(state.history.length * 2654435761 + 97, 10) + 1;
-  if (face !== 1 && face !== 10) return state;
+  const color = state.turn;
+
+  if (face !== 1 && face !== 10) {
+    return { ...state, lastRoll: { color, face, effect: 'none' } };
+  }
 
   const owned: Sq[] = [];
   state.board.forEach((p, s) => {
-    if (p?.color === state.turn && p.kind === 'c') owned.push(s);
+    if (p?.color === color && p.kind === 'c') owned.push(s);
   });
-  if (owned.length === 0) return state;
+  if (owned.length === 0) return { ...state, lastRoll: { color, face, effect: 'none' } };
   const target = owned[chance(state.history.length * 40503 + 13, owned.length)]!;
 
   const board = state.board.slice() as (Piece | null)[];
   const piece = board[target]!;
   if (face === 10) {
     board[target] = { ...piece, lives: (piece.lives ?? 0) + 1 };
-  } else if ((piece.lives ?? 0) > 0) {
-    board[target] = { ...piece, lives: (piece.lives ?? 0) - 1 };
-  } else {
-    return state; // nothing to take -- the roll stands but changes nothing
+    return { ...state, board, lastRoll: { color, face, effect: 'bless' } };
   }
-  return { ...state, board };
+  if ((piece.lives ?? 0) > 0) {
+    board[target] = { ...piece, lives: (piece.lives ?? 0) - 1 };
+    return { ...state, board, lastRoll: { color, face, effect: 'curse' } };
+  }
+  // Nothing to take -- the roll stands but changes nothing.
+  return { ...state, lastRoll: { color, face, effect: 'none' } };
 }
 
 /** Settle the position at the start of a turn: if the side to move is stuck,

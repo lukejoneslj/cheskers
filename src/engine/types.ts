@@ -165,6 +165,12 @@ export interface GameState {
   /** Remaining `undying` respawns per side. Optional so hand-built test
    *  positions and pre-augment saved states stay valid. */
   revives?: Partial<Record<Color, number>>;
+  /** The `loaded_dice` roll that opened this turn, if the side to move holds
+   *  it. Transient -- it describes how *this* state was reached, not
+   *  anything carried forward, so it is recomputed by `startTurn` every time
+   *  rather than accumulated. The UI reads it once per state change to show
+   *  the roll actually happening instead of resolving invisibly. */
+  lastRoll?: { color: Color; face: number; effect: 'bless' | 'curse' | 'none' } | null;
 }
 
 export const row = (sq: Sq): number => sq >> 3;

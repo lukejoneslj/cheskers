@@ -163,10 +163,13 @@ and that has to end the game exactly like any other King capture; an early
 build of this feature missed that case and let the loser play on with no
 King at all.
 
-`GAMBLER` and `QUESTLINE` are the two that live outside the engine entirely:
-they resolve inside the Mania draft screen rather than inside `rules.ts`,
-since a one-shot card draw or a two-round countdown is meta-progression for
-the run, not a rule the board itself needs to know about.
+`QUESTLINE` lives outside the engine entirely: it resolves inside the Mania
+draft screen rather than inside `rules.ts`, since a two-round countdown is
+meta-progression for the run, not a rule the board itself needs to know
+about. `GAMBLER` is the same, but it is a real hand, not a resolved coin
+flip: two cards each, HIT or STAND, the dealer plays second and in the open
+once you stop, closest to 21 without going over wins. Win and you keep
+`GAMBLER` plus a drafted bonus; bust, lose, or push and the bet is gone.
 
 ### Mania online
 
@@ -174,6 +177,17 @@ Ticking **Mania** when creating a room rolls three random augments per side
 and stores them in the room's ruleset. There is no synchronised draft
 protocol: the loadout is rolled once at creation, both clients read the same
 list, and their engines proceed identically from there.
+
+A side's own augment list stays writable after creation, though, unlike the
+rest of the ruleset — that's what lets **ESCALATE & REMATCH** on the
+game-over screen draft one more augment onto your own loadout before asking
+for a rematch, the same way a local Mania run keeps growing round over
+round. It's a per-player choice each time: either seat can escalate, decline
+and just play again as-is, or leave and start a fresh room to reset
+entirely. Database rules keep this safe without a server: a seat may only
+write its *own* colour, and only by appending — every index, once set, is
+immutable, so a client can never rewrite an augment the other side has
+already agreed to play against.
 
 This works because *per-piece state is never sent over the wire*. The wire
 format is still only `{from, to, by}`. Whose checker is carrying the keg, how

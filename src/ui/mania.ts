@@ -31,6 +31,16 @@ const el = <T extends HTMLElement>(id: string): T => {
 
 const BEST_KEY = 'cheskers:mania:best';
 
+/** A card's face value for the `gambler` hand: 1 through 10, standing in for
+ *  a standard deck without needing suit art or Ace soft/hard logic -- the
+ *  game is "closest to 21," not real blackjack, so the simplification does
+ *  not cost it anything. */
+function drawCard(): number {
+  return 1 + Math.floor(Math.random() * 10);
+}
+
+const handTotal = (cards: number[]): number => cards.reduce((n, c) => n + c, 0);
+
 /** The opponent sharpens as the run goes on, independently of its augments. */
 function difficultyForRound(round: number): DifficultyKey {
   if (round <= 2) return 'easy';
@@ -47,6 +57,8 @@ export class Mania {
   private playerColor: Color = 'w';
   /** The round `questline` pays out at, once the player has drafted it. */
   private questlineTarget: number | null = null;
+  /** The live `gambler` hand, while one is in progress. */
+  private gamble: { you: number[]; dealer: number[]; over: boolean } | null = null;
 
   private readonly dom = {
     modal: el('mania-modal'),
@@ -55,6 +67,17 @@ export class Mania {
     cards: el('mania-cards'),
     round: el('mania-round'),
     note: el('mania-note'),
+    gamble: el('mania-gamble'),
+    gambleYouCards: el('gamble-you-cards'),
+    gambleYouTotal: el('gamble-you-total'),
+    gambleYouHand: el('gamble-you-cards').closest('.gamble-hand') as HTMLElement,
+    gambleDealerCards: el('gamble-dealer-cards'),
+    gambleDealerTotal: el('gamble-dealer-total'),
+    gambleDealerHand: el('gamble-dealer-cards').closest('.gamble-hand') as HTMLElement,
+    gambleResult: el('gamble-result'),
+    gambleHit: el<HTMLButtonElement>('gamble-hit'),
+    gambleStand: el<HTMLButtonElement>('gamble-stand'),
+    gambleContinue: el<HTMLButtonElement>('gamble-continue'),
     reply: el('mania-reply'),
     replyLabel: el('mania-reply-label'),
     replyCard: el('mania-reply-card'),
@@ -110,6 +133,18 @@ export class Mania {
       this.dom.modal.hidden = true;
       this.beginMatch();
     });
+    this.dom.gambleHit.addEventListener('click', () => {
+      sound.tick();
+      this.gambleHit();
+    });
+    this.dom.gambleStand.addEventListener('click', () => {
+      sound.tick();
+      this.gambleStand();
+    });
+    this.dom.gambleContinue.addEventListener('click', () => {
+      sound.tick();
+      this.finishGamble();
+    });
   }
 
   private open(): void {
@@ -149,6 +184,7 @@ export class Mania {
     this.mine = [];
     this.theirs = [];
     this.questlineTarget = null;
+    this.gamble = null;
     this.playerColor = Math.random() < 0.5 ? 'w' : 'b';
     this.dom.quit.hidden = false;
     this.nextRound();
@@ -196,8 +232,10 @@ export class Mania {
     this.dom.note.textContent = note ?? '';
 
     // Back to the picking half of the draft, in case the last thing on screen
-    // was the previous round's reveal.
+    // was the previous round's reveal or a gambler hand.
     this.dom.cards.hidden = false;
+    this.dom.gamble.hidden = true;
+    this.gamble = null;
     this.dom.reply.hidden = true;
     this.dom.go.hidden = true;
 
@@ -270,41 +308,144 @@ export class Mania {
     // a two-round clock, settled at the top of `nextRound`.
     if (choice.id === 'questline') this.questlineTarget = this.round + 2;
 
-    // `gambler` resolves the instant it is drafted: one push-your-luck draw,
-    // blessing or curse decided on the spot rather than sitting in the
-    // loadout as a rule the engine has to know about.
-    const gambleNote = choice.id === 'gambler' ? this.resolveGamble() : null;
+    // `gambler` opens an actual hand rather than resolving on the spot --
+    // the opponent's reply and the BEGIN ROUND button wait for it to finish,
+    // see `finishGamble`.
+    if (choice.id === 'gambler') {
+      this.startGamble();
+      return;
+    }
 
+    this.dealReply(null);
+  }
+
+  /** The opponent's answering draft, plus the reveal screen. Split out from
+   *  `pick` so `finishGamble` can call it once the hand is over. */
+  private dealReply(note: string | null): void {
     // The opponent answers with one of its own, drawn from what is left. Its
     // pool excludes what it already holds but *not* what the player took --
     // both sides can end up running the same augment, which is fine.
     const reply = draft(this.theirs, 1, this.round)[0];
     if (reply) this.theirs.push(reply.id);
-
-    this.showReply(reply ?? null, gambleNote);
+    this.showReply(reply ?? null, note);
   }
 
-  /** One draw of push-your-luck: two dealt totals, higher wins. A win drafts
-   *  a bonus augment on top of `gambler` itself, weighted well toward the
-   *  rare end of the pool since it is a reward, not an ordinary pick. A loss
-   *  or a push takes `gambler` back -- the bet is spent either way. */
-  private resolveGamble(): string {
-    const draw = () => 1 + Math.floor(Math.random() * 10) + 1 + Math.floor(Math.random() * 10);
-    const you = draw();
-    const dealer = draw();
-    const held = this.mine.filter((id) => id !== 'gambler');
+  // -- gambler: an actual hand of "closest to 21" ---------------------------
 
-    if (you > dealer) {
+  private startGamble(): void {
+    this.gamble = { you: [drawCard(), drawCard()], dealer: [drawCard()], over: false };
+    this.dom.cards.hidden = true;
+    this.dom.gamble.hidden = false;
+    this.dom.gambleResult.hidden = true;
+    this.dom.gambleContinue.hidden = true;
+    this.dom.gambleHit.hidden = false;
+    this.dom.gambleStand.hidden = false;
+    this.renderGamble();
+  }
+
+  private gambleHit(): void {
+    if (!this.gamble || this.gamble.over) return;
+    this.gamble.you.push(drawCard());
+    if (handTotal(this.gamble.you) >= 21) this.gambleStand();
+    else this.renderGamble();
+  }
+
+  private gambleStand(): void {
+    if (!this.gamble || this.gamble.over) return;
+    // The dealer plays second and in the open: hit on 16 or below, stop at
+    // 17+. Skips entirely if the player already busted -- no need to draw a
+    // hand nobody is going to compare it to.
+    if (handTotal(this.gamble.you) <= 21) {
+      while (handTotal(this.gamble.dealer) < 17) this.gamble.dealer.push(drawCard());
+    }
+    this.gamble.over = true;
+    this.renderGamble();
+    this.settleGamble();
+  }
+
+  private renderGamble(): void {
+    const g = this.gamble;
+    if (!g) return;
+    const you = handTotal(g.you);
+    const dealerRevealed = g.over;
+    const dealer = handTotal(g.dealer);
+
+    const renderHand = (host: HTMLElement, cards: number[], hideLast: boolean) => {
+      host.replaceChildren();
+      cards.forEach((c, i) => {
+        const card = document.createElement('span');
+        card.className = 'gamble-card';
+        const hidden = hideLast && i === cards.length - 1 && cards.length > 1;
+        card.dataset.hidden = String(hidden);
+        card.textContent = hidden ? '?' : String(c);
+        host.appendChild(card);
+      });
+    };
+
+    renderHand(this.dom.gambleYouCards, g.you, false);
+    this.dom.gambleYouTotal.textContent = String(you);
+    this.dom.gambleYouHand.dataset.bust = String(you > 21);
+    this.dom.gambleYouHand.dataset.blackjack = String(you === 21);
+
+    // The dealer's second card stays face down until you stand or bust --
+    // that is the entire tension of the genre.
+    renderHand(this.dom.gambleDealerCards, g.dealer, !dealerRevealed);
+    this.dom.gambleDealerTotal.textContent = dealerRevealed ? String(dealer) : '?';
+    this.dom.gambleDealerHand.dataset.bust = String(dealerRevealed && dealer > 21);
+    this.dom.gambleDealerHand.dataset.blackjack = String(dealerRevealed && dealer === 21);
+
+    const busted = you > 21;
+    this.dom.gambleHit.disabled = busted;
+    if (busted && !g.over) {
+      g.over = true;
+      this.settleGamble();
+    }
+  }
+
+  /** Decide the hand and update the loadout. A win keeps `gambler` and drafts
+   *  a bonus on top of it, weighted well toward the rare end of the pool
+   *  since it is a reward, not an ordinary pick. A loss or a push takes
+   *  `gambler` back -- the bet is spent either way. */
+  private settleGamble(): void {
+    const g = this.gamble;
+    if (!g) return;
+    const you = handTotal(g.you);
+    const dealer = handTotal(g.dealer);
+    const held = this.mine.filter((id) => id !== 'gambler');
+    const youBust = you > 21;
+    const dealerBust = dealer > 21;
+    const win = !youBust && (dealerBust || you > dealer);
+    const push = !youBust && !dealerBust && you === dealer;
+
+    let result: string;
+    if (win) {
       const bonus = draft(held, 1, this.round + 6)[0];
       this.mine = bonus ? [...held, 'gambler', bonus.id] : [...held, 'gambler'];
-      return bonus
-        ? `GAMBLER — you drew ${you} against ${dealer} and win ${bonus.glyph} ${bonus.name}!`
-        : `GAMBLER — you drew ${you} against ${dealer} and win, but hold everything already.`;
+      result = bonus
+        ? `YOU WIN ${you} TO ${dealerBust ? 'a bust' : dealer} — ${bonus.glyph} ${bonus.name}!`
+        : `YOU WIN ${you} TO ${dealerBust ? 'A BUST' : dealer} — BUT YOU HOLD EVERYTHING ALREADY.`;
+    } else if (push) {
+      this.mine = held;
+      result = `YOU PUSH AT ${you} APIECE. THE BET IS RETURNED.`;
+    } else {
+      this.mine = held;
+      result = youBust
+        ? `YOU BUST AT ${you}. THE BET IS GONE.`
+        : `THE DEALER WINS ${dealer} TO ${you}. THE BET IS GONE.`;
     }
-    this.mine = held;
-    return you === dealer
-      ? `GAMBLER — you push at ${you} apiece. The bet is returned, table stays even.`
-      : `GAMBLER — you drew ${you} against ${dealer} and bust. The bet is gone.`;
+
+    this.dom.gambleResult.hidden = false;
+    this.dom.gambleResult.textContent = result;
+    this.dom.gambleHit.hidden = true;
+    this.dom.gambleStand.hidden = true;
+    this.dom.gambleContinue.hidden = false;
+    sound.tick();
+  }
+
+  private finishGamble(): void {
+    this.gamble = null;
+    this.dom.gamble.hidden = true;
+    this.dealReply(null);
   }
 
   /** Hold the draft open long enough to show what the opponent took. */
@@ -398,6 +539,7 @@ export class Mania {
     this.mine = [];
     this.theirs = [];
     this.questlineTarget = null;
+    this.gamble = null;
     this.dom.quit.hidden = true;
     this.dom.modal.hidden = true;
     this.ai.leave();

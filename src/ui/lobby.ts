@@ -7,7 +7,7 @@
  * re-validated against our own engine before it is played.
  */
 
-import { rollLoadout } from '../engine/augments';
+import { draft, rollLoadout } from '../engine/augments';
 import type { Outcome } from '../engine/elo';
 import { DEFAULT_RULES, type Color, type Move, type Rules } from '../engine/types';
 import { accounts, cleanName } from '../net/auth';
@@ -253,6 +253,7 @@ export class Lobby implements MatchPeer {
     this.app.setRatings({});
     this.app.showRatingChange(null);
     this.app.setModePanel(null);
+    this.app.setEscalateAction(null);
     this.app.resetForMatch({ ...this.app.getState().rules, augments: {} });
   }
 
@@ -290,6 +291,13 @@ export class Lobby implements MatchPeer {
       action: 'ROOM',
       onClick: () => this.open(),
     });
+    // A Mania room's augments stay writable after creation (see
+    // database.rules.json) precisely so a seated player can escalate on
+    // rematch instead of replaying the same three augments forever. A
+    // spectator or a plain (non-Mania) room has nothing to escalate.
+    this.app.setEscalateAction(
+      mania && snapshot.seat !== 'spectator' ? () => this.escalate() : null,
+    );
     // Sitting down at a room means leaving the menu behind.
     screens.show('game');
 
@@ -303,6 +311,42 @@ export class Lobby implements MatchPeer {
 
     this.updateStatus(snapshot);
     void this.syncRatings(snapshot);
+  }
+
+  /** Draft one fresh augment onto the local seat's own loadout, then offer a
+   *  rematch the normal way. Escalating is a per-player choice each round --
+   *  the other seat might escalate too, might just play again as-is, and
+   *  either is fine, since each side only ever writes its own colour. */
+  private escalate(): void {
+    const snapshot = this.lastSnapshot;
+    if (!snapshot || this.seat === 'spectator') return;
+    const color = this.seat;
+    const held = snapshot.rules.augments?.[color] ?? [];
+    // Weighted by generation the same way a local Mania run weights by
+    // round, so an online run visibly gets stranger the longer it goes too.
+    const bonus = draft(held, 1, snapshot.generation + 3)[0];
+
+    const proceed = () =>
+      this.room.offerRematch().catch((error: unknown) => {
+        this.showError(
+          `Rematch failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+
+    if (!bonus) {
+      void proceed();
+      return;
+    }
+    void this.room
+      .addAugment(bonus.id)
+      .then(proceed)
+      .catch((error: unknown) => {
+        this.showError(
+          `Could not add ${bonus.name}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      });
   }
 
   /** Fetch both players' ratings once a pairing exists, and show them. */

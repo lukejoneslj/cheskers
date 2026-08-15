@@ -756,6 +756,37 @@ describe('loaded dice', () => {
     }
     expect(s.board.some((p) => p?.color === 'b' && (p.lives ?? 0) > 0)).toBe(false);
   });
+
+  it('records every roll on lastRoll, not only the two faces that do anything', () => {
+    // The UI reads `lastRoll` to show the roll actually happening -- if only
+    // the blessing/curse faces set it, most turns would show nothing at all.
+    let s = position(
+      { a1: 'wK', h8: 'bK', c3: 'wc', f6: 'bc' },
+      { rules: rules(['loaded_dice']) },
+    );
+    let sawAnyRoll = false;
+    let sawFaceOutsideOneAndTen = false;
+    for (let i = 0; i < 10 && s.status === 'playing'; i++) {
+      const from = s.turn === 'w' ? S('a1') : S('h8');
+      const move = legalMovesFrom(s, from)[i % legalMovesFrom(s, from).length];
+      if (!move) break;
+      s = applyMove(s, move);
+      // The roll happens at the top of the *next* turn, so it shows up once
+      // it is white's move again (white is the one holding the augment).
+      if (s.turn === 'w' && s.lastRoll) {
+        sawAnyRoll = true;
+        if (s.lastRoll.face !== 1 && s.lastRoll.face !== 10) sawFaceOutsideOneAndTen = true;
+      }
+    }
+    expect(sawAnyRoll).toBe(true);
+    expect(sawFaceOutsideOneAndTen).toBe(true);
+  });
+
+  it('clears lastRoll once the side no longer holds the augment (fresh game, no augment)', () => {
+    const s = position({ a1: 'wK', h8: 'bK', c3: 'wc' });
+    const after = applyMove(s, legalMovesFrom(s, S('a1'))[0]!);
+    expect(after.lastRoll ?? null).toBeNull();
+  });
 });
 
 describe('augments are per side', () => {

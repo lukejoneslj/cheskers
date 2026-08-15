@@ -85,11 +85,20 @@
           // Mania rooms carry a rolled augment loadout per side. Both clients
           // read the identical list, so their engines cannot disagree about
           // what a move meant.
+          //
+          // Unlike the rest of `rules`, a side's own augment list stays
+          // writable after creation -- that is what lets a rematch escalate
+          // with a freshly rolled augment instead of only ever replaying the
+          // same three. Only the player seated in that colour may write it,
+          // and only by appending: each `$index` may be set once and never
+          // changed afterwards, so a client cannot rewrite an augment the
+          // other side has already agreed to play against.
           "augments": {
             "$color": {
+              ".write": "auth != null && root.child('rooms/' + $code + '/players/' + $color + '/uid').val() === auth.uid",
               ".validate": "$color === 'w' || $color === 'b'",
               "$index": {
-                ".validate": "newData.isString() && newData.val().length <= 24"
+                ".validate": "newData.isString() && newData.val().length <= 24 && (!data.exists() || newData.val() === data.val())"
               }
             }
           },

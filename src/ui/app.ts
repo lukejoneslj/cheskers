@@ -86,7 +86,13 @@ export class App {
     btnResign: el<HTMLButtonElement>('btn-resign'),
     optForced: el<HTMLInputElement>('opt-forced'),
     optStuck: el<HTMLInputElement>('opt-stuck'),
+    diceToast: el('dice-toast'),
+    diceFace: el('dice-toast-face'),
+    diceText: el('dice-toast-text'),
   };
+
+  private diceTimer = 0;
+  private escalateAction: (() => void) | null = null;
 
   constructor() {
     this.state = initialState(this.rules);
@@ -192,6 +198,10 @@ export class App {
     el('btn-new').addEventListener('click', restart);
     el('over-again').addEventListener('click', restart);
     el('over-close').addEventListener('click', () => {
+      this.dom.overModal.hidden = true;
+    });
+    el<HTMLButtonElement>('over-escalate').addEventListener('click', () => {
+      this.escalateAction?.();
       this.dom.overModal.hidden = true;
     });
 
@@ -301,6 +311,15 @@ export class App {
     this.dom.modeAction.onclick = () => panel.onClick();
   }
 
+  /** Lets the lobby offer an "ESCALATE & REMATCH" button on the game-over
+   *  modal, for an online Mania room where the local seat can add a fresh
+   *  augment before asking for a rematch. Pass null outside that context —
+   *  hotseat, vs AI, and a non-Mania room all have nothing to escalate. */
+  setEscalateAction(action: (() => void) | null): void {
+    this.escalateAction = action;
+    el<HTMLButtonElement>('over-escalate').hidden = !action;
+  }
+
   setBinding(binding: MatchBinding): void {
     const seatChanged = this.binding.control !== binding.control;
     this.binding = binding;
@@ -369,6 +388,8 @@ export class App {
     this.clearSelection();
     this.view.reset(this.state);
     this.dom.overModal.hidden = true;
+    window.clearTimeout(this.diceTimer);
+    this.dom.diceToast.hidden = true;
     this.setHint('');
     this.refresh();
     sound.tick();
@@ -464,11 +485,45 @@ export class App {
     if (before.history.length === 0) music.enterGame();
     this.view.animate(before, move, after);
     this.playMoveSounds(before, move, after);
+    this.showDiceRoll(before, after);
 
     this.binding.onLocalMove?.(move, after);
 
     this.setHint('');
     this.refresh();
+  }
+
+  /** `loaded_dice` resolves silently inside the engine -- this is the only
+   *  place that roll becomes visible. `startTurn` only recomputes
+   *  `lastRoll` when it actually opens a new turn, so a fresh object here
+   *  (as opposed to the one already on `before`) means a real roll just
+   *  happened, not a stale one carried over from mid-chain. */
+  private showDiceRoll(before: GameState, after: GameState): void {
+    const roll = after.lastRoll;
+    if (!roll || roll === before.lastRoll) return;
+
+    const owner = this.binding.names?.[roll.color] ?? (roll.color === 'w' ? 'WHITE' : 'BLACK');
+    const text =
+      roll.effect === 'bless'
+        ? `${owner} ROLLS A ${roll.face} — A CHECKER IS BLESSED`
+        : roll.effect === 'curse'
+          ? `${owner} ROLLS A ${roll.face} — A CHECKER LOSES A LIFE`
+          : `${owner} ROLLS A ${roll.face}`;
+
+    window.clearTimeout(this.diceTimer);
+    const { diceToast, diceFace, diceText } = this.dom;
+    diceToast.hidden = true;
+    diceToast.dataset.effect = roll.effect;
+    diceFace.textContent = String(roll.face);
+    diceText.textContent = text;
+    // Force a reflow so the pop-in animation restarts even when the last
+    // roll's toast has not finished fading yet.
+    void diceToast.offsetWidth;
+    diceToast.hidden = false;
+    sound.tick();
+    this.diceTimer = window.setTimeout(() => {
+      diceToast.hidden = true;
+    }, 1900);
   }
 
   /** Called by the network layer when the opponent concedes. */
@@ -490,6 +545,7 @@ export class App {
     if (before.history.length === 0) music.enterGame();
     this.view.animate(before, move, after);
     this.playMoveSounds(before, move, after);
+    this.showDiceRoll(before, after);
     this.refresh();
   }
 

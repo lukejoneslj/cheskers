@@ -155,6 +155,10 @@
         <div class="ranks" id="ranks" aria-hidden="true"></div>
         <div class="files" id="files" aria-hidden="true"></div>
         <canvas id="board" role="img" aria-label="Cheskers board"></canvas>
+        <div class="dice-toast" id="dice-toast" hidden>
+          <span class="dice-toast-face" id="dice-toast-face">?</span>
+          <span class="dice-toast-text" id="dice-toast-text"></span>
+        </div>
       </div>
       <p class="hint" id="hint"></p>
     </section>
@@ -199,6 +203,9 @@
     </div>
     <div class="modal-actions">
       <button id="over-again" class="btn btn-primary" type="button">PLAY AGAIN</button>
+      <button id="over-escalate" class="btn btn-accent" type="button" hidden>
+        ESCALATE &amp; REMATCH
+      </button>
       <button id="over-close" class="btn" type="button">VIEW BOARD</button>
     </div>
   </div>
@@ -316,6 +323,31 @@
       <h3 class="mania-round" id="mania-round">ROUND 1</h3>
       <p class="mania-note" id="mania-note" hidden></p>
       <div class="aug-cards" id="mania-cards"></div>
+
+      <!-- GAMBLER: an actual hand, played to 21, not a simulated coin flip. -->
+      <div id="mania-gamble" hidden>
+        <p class="gamble-label">GAMBLER — HIT OR STAND. CLOSEST TO 21 WITHOUT GOING OVER.</p>
+        <div class="gamble-hands">
+          <div class="gamble-hand">
+            <span class="gamble-hand-label">YOU</span>
+            <span class="gamble-cards" id="gamble-you-cards"></span>
+            <span class="gamble-total" id="gamble-you-total">0</span>
+          </div>
+          <div class="gamble-hand">
+            <span class="gamble-hand-label">DEALER</span>
+            <span class="gamble-cards" id="gamble-dealer-cards"></span>
+            <span class="gamble-total" id="gamble-dealer-total">0</span>
+          </div>
+        </div>
+        <p class="mania-note" id="gamble-result" hidden></p>
+        <div class="modal-actions">
+          <button id="gamble-hit" class="btn btn-primary" type="button">HIT</button>
+          <button id="gamble-stand" class="btn" type="button">STAND</button>
+          <button id="gamble-continue" class="btn btn-primary" type="button" hidden>
+            CONTINUE
+          </button>
+        </div>
+      </div>
 
       <!-- Shown after you pick, so the opponent's own roll is something you
            watch happen rather than something you discover mid-game. -->
