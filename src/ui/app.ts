@@ -27,6 +27,7 @@ import {
   squareName,
 } from '../engine/types';
 import { augment } from '../engine/augments';
+import { attachAugTip } from './aug-ui';
 import { BoardView } from '../render/board-view';
 import { SpriteAtlas, spriteKey } from '../render/sprites';
 import { music } from './music';
@@ -93,6 +94,10 @@ export class App {
 
   private diceTimer = 0;
   private escalateAction: (() => void) | null = null;
+  /** Set while some mode needs the board frozen even though the local player
+   *  is seated -- online Mania holds it until both sides have drafted. The
+   *  string is the reason, shown when they try to move anyway. */
+  private inputLock: string | null = null;
 
   constructor() {
     this.state = initialState(this.rules);
@@ -398,9 +403,17 @@ export class App {
     music.enterMenu();
   }
 
+  /** Freeze the board with a reason, or pass null to hand it back. */
+  setInputLocked(reason: string | null): void {
+    this.inputLock = reason;
+    if (reason) this.setHint(reason);
+    this.refresh();
+  }
+
   /** True when the local player is allowed to act right now. */
   private get myTurn(): boolean {
     const { control } = this.binding;
+    if (this.inputLock !== null) return false;
     if (control === 'none') return false;
     return control === 'both' || control === this.state.turn;
   }
@@ -419,7 +432,7 @@ export class App {
     }
 
     if (!this.myTurn) {
-      this.warn('WAITING FOR OPPONENT');
+      this.warn(this.inputLock ?? 'WAITING FOR OPPONENT');
       return;
     }
 
@@ -690,7 +703,6 @@ export class App {
       const chip = document.createElement('span');
       chip.className = 'card-aug';
       chip.dataset.rarity = a.rarity;
-      chip.title = `${a.name} — ${a.blurb}`;
 
       const glyph = document.createElement('span');
       glyph.className = 'card-aug-glyph';
@@ -699,6 +711,7 @@ export class App {
       name.className = 'card-aug-name';
       name.textContent = a.name;
       chip.append(glyph, name);
+      attachAugTip(chip, a);
       host.appendChild(chip);
     }
   }

@@ -47,11 +47,11 @@
   <p class="menu-tagline">Chess and checkers on one board. Take the king to win.</p>
 
   <div class="mode-grid">
-    <button class="mode-card" id="mode-campaign" type="button" data-tone="story">
-      <span class="mode-glyph">🕯</span>
-      <span class="mode-name">THE LONG GAME</span>
-      <span class="mode-desc">Eight opponents. Each plays a little further from the rules you were taught.</span>
-      <span class="mode-tag" id="mode-campaign-tag">CAMPAIGN</span>
+    <button class="mode-card" id="mode-ai" type="button" data-tone="ai">
+      <span class="mode-glyph">🤖</span>
+      <span class="mode-name">VS COMPUTER</span>
+      <span class="mode-desc">Play the search engine at three strengths. Pick your colour.</span>
+      <span class="mode-tag">SINGLE PLAYER</span>
     </button>
 
     <button class="mode-card" id="mode-mania" type="button" data-tone="mania">
@@ -59,13 +59,6 @@
       <span class="mode-name">CHESKERS MANIA</span>
       <span class="mode-desc">Draft rule-breaking augments each round. Lose once and the run ends.</span>
       <span class="mode-tag" id="mode-mania-tag">ROGUELIKE</span>
-    </button>
-
-    <button class="mode-card" id="mode-ai" type="button" data-tone="ai">
-      <span class="mode-glyph">🤖</span>
-      <span class="mode-name">VS COMPUTER</span>
-      <span class="mode-desc">Play the search engine at three strengths. Pick your colour.</span>
-      <span class="mode-tag">SINGLE PLAYER</span>
     </button>
 
     <button class="mode-card" id="mode-online" type="button" data-tone="online">
@@ -80,6 +73,13 @@
       <span class="mode-name">PASS AND PLAY</span>
       <span class="mode-desc">Two players, one screen, no accounts needed.</span>
       <span class="mode-tag">HOTSEAT</span>
+    </button>
+
+    <button class="mode-card" id="mode-campaign" type="button" data-tone="story">
+      <span class="mode-glyph">🕯</span>
+      <span class="mode-name">THE LONG GAME</span>
+      <span class="mode-desc">Eight opponents. Each plays a little further from the rules you were taught.</span>
+      <span class="mode-tag" id="mode-campaign-tag">CAMPAIGN</span>
     </button>
 
     <button class="mode-card" id="mode-help" type="button" data-tone="help">
@@ -431,7 +431,7 @@
         </span>
         <span class="mania-toggle-text">
           <span class="mania-toggle-title">CHESKERS MANIA</span>
-          <span class="mania-toggle-blurb">Roll random augments for both sides</span>
+          <span class="mania-toggle-blurb">Both players draft an augment before every game</span>
         </span>
       </label>
 
@@ -461,6 +461,21 @@
     <div class="modal-actions">
       <button id="lobby-close" class="btn" type="button">CLOSE</button>
       <button id="lobby-leave" class="btn btn-danger" type="button" hidden>LEAVE ROOM</button>
+    </div>
+  </div>
+</div>
+
+<!-- Online Mania draft ----------------------------------------------- -->
+<div class="modal-backdrop" id="draft-modal" hidden>
+  <div class="modal modal-wide">
+    <h2 class="modal-title">DRAFT YOUR AUGMENT</h2>
+    <h3 class="mania-round" id="draft-round">GAME 1 — PICK 1 OF 3</h3>
+    <div class="aug-cards" id="draft-cards"></div>
+    <p class="modal-body lobby-status" id="draft-status" hidden></p>
+    <div class="held-row" id="draft-held" hidden></div>
+    <div class="held-row" id="draft-held-theirs" hidden></div>
+    <div class="modal-actions">
+      <button id="draft-leave" class="btn btn-danger" type="button">LEAVE ROOM</button>
     </div>
   </div>
 </div>

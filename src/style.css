@@ -1005,6 +1005,33 @@ select.field {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The hover card that says what an augment actually does. Fixed-position and
+   parented to <body> so it is never clipped by a player card's own box. */
+.aug-tip {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  gap: 6px;
+  max-width: 260px;
+  padding: 10px 12px;
+  background: var(--ink-soft);
+  border: var(--bd) solid var(--edge);
+  box-shadow: 0 var(--drop) 0 var(--edge);
+  pointer-events: none;
+}
+.aug-tip[hidden] { display: none; }
+.aug-tip-name { font-size: 9px; letter-spacing: 1px; color: var(--cream); }
+.aug-tip-blurb { font-size: 8px; line-height: 1.9; color: var(--muted); }
+.aug-tip-rarity { font-size: 7px; letter-spacing: 1px; color: var(--muted); }
+.aug-tip[data-rarity='rare']   { border-color: var(--blue); }
+.aug-tip[data-rarity='rare'] .aug-tip-rarity   { color: var(--blue); }
+.aug-tip[data-rarity='cursed'] { border-color: var(--red); }
+.aug-tip[data-rarity='cursed'] .aug-tip-rarity { color: var(--red); }
+
+.card-aug:focus-visible,
+.held-chip:focus-visible { outline: 2px solid var(--cream); outline-offset: 2px; }
+.held-chip { cursor: help; }
+
 .card-aug[data-rarity='rare']   { border-color: var(--blue); }
 .card-aug[data-rarity='cursed'] { border-color: var(--red); }
 .card-aug[data-rarity='rare'] .card-aug-name   { color: var(--blue); }
@@ -1469,3 +1496,8 @@ select.field {
   [data-horror] .app,
   [data-horror] .logo { animation: none !important; }
 }
+
+/* The online Mania draft ------------------------------------------------- */
+
+#draft-cards[hidden] { display: none; }
+#draft-status { margin: 4px 0 12px; }

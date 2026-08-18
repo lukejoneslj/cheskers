@@ -173,21 +173,28 @@ once you stop, closest to 21 without going over wins. Win and you keep
 
 ### Mania online
 
-Ticking **Mania** when creating a room rolls three random augments per side
-and stores them in the room's ruleset. There is no synchronised draft
-protocol: the loadout is rolled once at creation, both clients read the same
-list, and their engines proceed identically from there.
+Ticking **Mania** when creating a room opens a draft instead of rolling for
+you. Before the first game each player picks three augments, one at a time
+from three cards, and every rematch adds one more pick on top — so an online
+run escalates exactly the way a local one does.
 
-A side's own augment list stays writable after creation, though, unlike the
-rest of the ruleset — that's what lets **ESCALATE & REMATCH** on the
-game-over screen draft one more augment onto your own loadout before asking
-for a rematch, the same way a local Mania run keeps growing round over
-round. It's a per-player choice each time: either seat can escalate, decline
-and just play again as-is, or leave and start a fresh room to reset
-entirely. Database rules keep this safe without a server: a seat may only
-write its *own* colour, and only by appending — every index, once set, is
-immutable, so a client can never rewrite an augment the other side has
-already agreed to play against.
+There is no draft *protocol* to keep in step. The cards are dealt locally for
+your own seat only: the two clients never have to agree on what was
+**offered**, only on what was **taken**, and a pick is a plain write to your
+own colour in the room's ruleset. How many augments a side owes before the
+game may start is a pure function of the room's generation, so both clients
+work it out for themselves and both freeze the board until the two loadouts
+are settled. Nothing is tracked client-side, so a refresh mid-draft picks up
+exactly where it left off.
+
+Database rules keep this safe without a server: a seat may only write its
+*own* colour, and only by appending — every index, once set, is immutable, so
+a client can never rewrite an augment the other side has already agreed to
+play against.
+
+Each side's loadout is on its player card all game, and hovering (or tapping,
+on a touch screen) any augment chip says what that augment does — for your
+opponent's as well as your own.
 
 This works because *per-piece state is never sent over the wire*. The wire
 format is still only `{from, to, by}`. Whose checker is carrying the keg, how

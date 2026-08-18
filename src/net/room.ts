@@ -23,6 +23,10 @@ export interface RoomSnapshot {
   code: string;
   seat: Seat;
   rules: Rules;
+  /** True when this room was created as a Mania room. Carried as its own flag
+   *  rather than inferred from the augment lists, because a drafting room
+   *  starts with both loadouts empty and still has to open the draft. */
+  mania: boolean;
   status: 'waiting' | 'playing' | 'over';
   names: Partial<Record<Color, string>>;
   /** Account ids, needed to look up each side's rating. */
@@ -63,6 +67,7 @@ interface RoomRecord {
   createdAt: number;
   generation: number;
   rules: Rules;
+  mania?: boolean;
   status: 'waiting' | 'playing' | 'over';
   players?: Partial<Record<Color, { uid: string; name: string }>>;
   presence?: Partial<Record<Color, boolean>>;
@@ -92,7 +97,7 @@ export class Room {
 
   // -------------------------------------------------------------------------
 
-  async create(rules: Rules, name: string): Promise<string> {
+  async create(rules: Rules, name: string, mania = false): Promise<string> {
     const { db } = await connect();
     const uid = await currentUid();
     const { ref, runTransaction, serverTimestamp } = await import('firebase/database');
@@ -111,6 +116,7 @@ export class Room {
             createdAt: serverTimestamp() as unknown as number,
             generation: 0,
             rules,
+            mania,
             status: 'waiting',
             players: { w: { uid, name } },
             rematchOffer: null,
@@ -210,6 +216,12 @@ export class Room {
           code: this.code,
           seat: this.seat,
           rules: record.rules,
+          // Rooms created before the drafted-Mania flag existed only carry
+          // their rolled loadouts, so fall back to reading those.
+          mania:
+            record.mania === true ||
+            (record.rules.augments?.w?.length ?? 0) > 0 ||
+            (record.rules.augments?.b?.length ?? 0) > 0,
           status: record.status,
           names: {
             ...(record.players?.w ? { w: record.players.w.name } : {}),

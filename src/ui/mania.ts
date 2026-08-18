@@ -9,7 +9,8 @@
  * an augmented board with no special handling at all.
  */
 
-import { type Augment, augment, draft } from '../engine/augments';
+import { type Augment, draft } from '../engine/augments';
+import { augCard, renderHeld } from './aug-ui';
 import type { DifficultyKey } from './ai-match';
 import type { AiMatch, MatchResult } from './ai-match';
 import {
@@ -244,60 +245,15 @@ export class Mania {
     const cards = this.dom.cards;
     cards.replaceChildren();
     for (const a of this.offered) {
-      const card = this.augCard(a);
+      const card = augCard(a);
       card.addEventListener('click', () => this.pick(a));
       cards.appendChild(card);
     }
   }
 
-  private augCard(a: Augment): HTMLButtonElement {
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'aug-card';
-    card.dataset.rarity = a.rarity;
-    card.innerHTML =
-      `<span class="aug-glyph"></span>` +
-      `<span class="aug-name"></span>` +
-      `<span class="aug-blurb"></span>` +
-      `<span class="aug-rarity"></span>`;
-    card.querySelector('.aug-glyph')!.textContent = a.glyph;
-    card.querySelector('.aug-name')!.textContent = a.name;
-    card.querySelector('.aug-blurb')!.textContent = a.blurb;
-    card.querySelector('.aug-rarity')!.textContent = a.rarity.toUpperCase();
-    return card;
-  }
-
   private renderLoadouts(): void {
-    this.renderHeld(this.dom.held, this.mine, 'YOURS');
-    this.renderHeld(this.dom.heldTheirs, this.theirs, 'THEIRS');
-  }
-
-  /** Both loadouts are always on screen during a draft, empty or not: the
-   *  opponent collects augments at exactly the rate you do, and hiding its
-   *  row until it had one made it look like you were the only one rolling. */
-  private renderHeld(host: HTMLElement, ids: ReadonlyArray<AugmentId>, label: string): void {
-    host.replaceChildren();
-    host.hidden = false;
-    const tag = document.createElement('span');
-    tag.className = 'held-label';
-    tag.textContent = label;
-    host.appendChild(tag);
-    if (ids.length === 0) {
-      const none = document.createElement('span');
-      none.className = 'held-none';
-      none.textContent = 'NOTHING YET';
-      host.appendChild(none);
-      return;
-    }
-    for (const id of ids) {
-      const a = augment(id);
-      const chip = document.createElement('span');
-      chip.className = 'held-chip';
-      chip.dataset.rarity = a.rarity;
-      chip.title = a.blurb;
-      chip.textContent = `${a.glyph} ${a.name}`;
-      host.appendChild(chip);
-    }
+    renderHeld(this.dom.held, this.mine, 'YOURS');
+    renderHeld(this.dom.heldTheirs, this.theirs, 'THEIRS');
   }
 
   private pick(choice: Augment): void {
@@ -461,7 +417,7 @@ export class Mania {
       : 'YOUR OPPONENT HAS NOTHING LEFT TO TAKE';
     this.dom.replyCard.replaceChildren();
     if (reply) {
-      const card = this.augCard(reply);
+      const card = augCard(reply);
       card.disabled = true;
       this.dom.replyCard.appendChild(card);
     }

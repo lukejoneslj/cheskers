@@ -7,13 +7,20 @@
  * re-validated against our own engine before it is played.
  */
 
-import { draft, rollLoadout } from '../engine/augments';
+import { draft, type Augment } from '../engine/augments';
 import type { Outcome } from '../engine/elo';
-import { DEFAULT_RULES, type Color, type Move, type Rules } from '../engine/types';
+import {
+  DEFAULT_RULES,
+  type AugmentId,
+  type Color,
+  type Move,
+  type Rules,
+} from '../engine/types';
 import { accounts, cleanName } from '../net/auth';
 import { Room, type RoomSnapshot, type Seat, type WireMove } from '../net/room';
 import { isConfigured } from '../net/firebase';
 import type { App } from './app';
+import { augCard, renderHeld } from './aug-ui';
 import type { MatchPeer } from './match-peer';
 import { screens } from './screens';
 import { sound } from './sound';
@@ -24,8 +31,18 @@ const el = <T extends HTMLElement>(id: string): T => {
   return node as T;
 };
 
-/** Augments rolled per side when a room is created in Mania mode. */
+/** How many augments each side drafts before the first game of a Mania room.
+ *  Every rematch adds one more on top, so an online run escalates the same
+ *  way a local run does. */
 const MANIA_AUGMENTS = 3;
+
+/** How many augments a side should hold before the game of this generation
+ *  may start. Purely a function of the generation, so both clients agree on
+ *  it without having to synchronise anything. */
+const draftTarget = (generation: number): number => MANIA_AUGMENTS + generation;
+
+/** Cards offered per pick. */
+const DRAFT_CHOICES = 3;
 
 export class Lobby implements MatchPeer {
   private readonly room: Room;
@@ -41,6 +58,14 @@ export class Lobby implements MatchPeer {
    *  scores the game before the other. */
   private ratingsAtStart: Partial<Record<Color, { rating: number; games: number }>> = {};
   private ratedGeneration = -1;
+  /** The augment loadouts as of the last snapshot, so a pick landing mid-draft
+   *  can restart the board under the new ruleset exactly once. */
+  private augSignature = '';
+  /** The cards currently on offer, plus the pick they belong to. Held rather
+   *  than re-rolled per snapshot: the opponent's own pick arrives as a
+   *  snapshot too, and re-dealing there would swap the cards under the
+   *  player's finger mid-choice. */
+  private offers: { key: string; cards: Augment[] } | null = null;
 
   private readonly dom = {
     modal: el('lobby-modal'),
@@ -58,6 +83,13 @@ export class Lobby implements MatchPeer {
     copy: el<HTMLButtonElement>('lobby-copy'),
     close: el<HTMLButtonElement>('lobby-close'),
     leave: el<HTMLButtonElement>('lobby-leave'),
+    draftModal: el('draft-modal'),
+    draftRound: el('draft-round'),
+    draftCards: el('draft-cards'),
+    draftStatus: el('draft-status'),
+    draftHeld: el('draft-held'),
+    draftHeldTheirs: el('draft-held-theirs'),
+    draftLeave: el<HTMLButtonElement>('draft-leave'),
   };
 
   constructor(private readonly app: App) {
@@ -114,10 +146,21 @@ export class Lobby implements MatchPeer {
       this.leave();
     });
 
+    // The draft has no close button on purpose -- the game cannot start until
+    // it is done -- so this is the way out of a room you no longer want.
+    this.dom.draftLeave.addEventListener('click', () => {
+      sound.tick();
+      this.leave();
+    });
+
     this.dom.create.addEventListener('click', () => {
       this.peer?.leave();
       void this.guard(this.dom.create, async () => {
-        const code = await this.room.create(this.currentRules(), this.playerName());
+        const code = await this.room.create(
+          this.currentRules(),
+          this.playerName(),
+          this.dom.mania.checked,
+        );
         this.seat = 'w';
         this.joined = true;
         this.showWaiting(code);
@@ -161,12 +204,22 @@ export class Lobby implements MatchPeer {
       void accounts.setName(this.dom.name.value).catch(() => undefined);
     });
 
-    // Deep link: /?room=ABCD drops straight into the lobby with the code
-    // filled in, which is what makes "send your friend a link" work.
+    // Deep link: /?room=ABCD joins that room outright. An invite link should
+    // land you in your friend's room, not on the title screen in front of a
+    // form you still have to fill in -- the code is already in the URL, so
+    // there is nothing left to ask. A failed join falls back to the ordinary
+    // lobby with the code filled in, so a stale link is still recoverable.
     const invited = new URLSearchParams(window.location.search).get('room');
     if (invited) {
-      this.dom.code.value = invited.toUpperCase();
+      const code = invited.trim().toUpperCase();
+      this.dom.code.value = code;
       this.open();
+      this.peer?.leave();
+      void this.guard(this.dom.join, async () => {
+        this.seat = await this.room.join(code, this.playerName());
+        this.joined = true;
+        this.showWaiting(code);
+      });
     }
   }
 
@@ -201,14 +254,12 @@ export class Lobby implements MatchPeer {
    * the game for someone who never saw it. Online is always the standard
    * ruleset: no forced jumps.
    *
-   * Augments are the one exception, and they are rolled here and stored in
-   * the room, so both clients read the same loadout and their engines cannot
-   * disagree about what a move meant. */
+   * A Mania room starts with both loadouts empty on purpose: the augments are
+   * drafted in the room, one pick at a time, and each side writes only its own
+   * colour. Both clients therefore read the identical loadout before the first
+   * move and their engines cannot disagree about what a move meant. */
   private currentRules(): Rules {
-    return {
-      ...DEFAULT_RULES,
-      augments: this.dom.mania.checked ? rollLoadout(MANIA_AUGMENTS) : {},
-    };
+    return { ...DEFAULT_RULES, augments: {} };
   }
 
   /** Run an async action with the button disabled and errors surfaced. */
@@ -241,6 +292,7 @@ export class Lobby implements MatchPeer {
 
   leave(): void {
     this.room.leave();
+    this.closeDraft();
     this.joined = false;
     this.seat = 'spectator';
     this.generation = -1;
@@ -248,6 +300,7 @@ export class Lobby implements MatchPeer {
     this.dom.modal.hidden = true;
     this.ratingsAtStart = {};
     this.ratedGeneration = -1;
+    this.augSignature = '';
     this.app.setBinding({ control: 'both' });
     this.app.setPresence({});
     this.app.setRatings({});
@@ -267,10 +320,24 @@ export class Lobby implements MatchPeer {
 
     // A new generation means a rematch was agreed and the move log was
     // cleared, so the local board has to go back to the starting position.
+    const augSignature = JSON.stringify(snapshot.rules.augments ?? {});
     if (snapshot.generation !== this.generation) {
       this.generation = snapshot.generation;
+      this.augSignature = augSignature;
+      this.offers = null;
       this.room.resetApplied();
       this.app.resetForMatch(snapshot.rules);
+    } else if (augSignature !== this.augSignature) {
+      this.augSignature = augSignature;
+      // A draft pick changed the ruleset. That only ever happens before the
+      // first move of a generation (the board is frozen until both sides have
+      // finished drafting), so rebuilding the position here is safe -- and
+      // necessary, since the engine has to be holding the augments before
+      // anyone is allowed to move.
+      if (snapshot.moves.length === 0) {
+        this.room.resetApplied();
+        this.app.resetForMatch(snapshot.rules);
+      }
     }
 
     this.app.setBinding({
@@ -280,9 +347,7 @@ export class Lobby implements MatchPeer {
     });
     this.app.setPresence(snapshot.online);
 
-    const mania =
-      (snapshot.rules.augments?.w?.length ?? 0) > 0 ||
-      (snapshot.rules.augments?.b?.length ?? 0) > 0;
+    const mania = snapshot.mania;
     this.app.setModeLabel(
       `${mania ? 'ONLINE MANIA' : 'ONLINE'} · ROOM ${snapshot.code}`,
     );
@@ -291,17 +356,16 @@ export class Lobby implements MatchPeer {
       action: 'ROOM',
       onClick: () => this.open(),
     });
-    // A Mania room's augments stay writable after creation (see
-    // database.rules.json) precisely so a seated player can escalate on
-    // rematch instead of replaying the same three augments forever. A
-    // spectator or a plain (non-Mania) room has nothing to escalate.
-    this.app.setEscalateAction(
-      mania && snapshot.seat !== 'spectator' ? () => this.escalate() : null,
-    );
+    // A rematch in a Mania room escalates by itself: the next generation
+    // raises the draft target, so both players pick another augment before
+    // the board unfreezes. There is nothing left for a separate escalate
+    // button to do.
+    this.app.setEscalateAction(null);
     // Sitting down at a room means leaving the menu behind.
     screens.show('game');
 
     this.applyPending(snapshot);
+    this.syncDraft(snapshot);
 
     // A concession is not a move, so it arrives as its own flag rather than in
     // the move log. Ignore our own — that board is already finished.
@@ -313,40 +377,119 @@ export class Lobby implements MatchPeer {
     void this.syncRatings(snapshot);
   }
 
-  /** Draft one fresh augment onto the local seat's own loadout, then offer a
-   *  rematch the normal way. Escalating is a per-player choice each round --
-   *  the other seat might escalate too, might just play again as-is, and
-   *  either is fine, since each side only ever writes its own colour. */
-  private escalate(): void {
-    const snapshot = this.lastSnapshot;
-    if (!snapshot || this.seat === 'spectator') return;
-    const color = this.seat;
-    const held = snapshot.rules.augments?.[color] ?? [];
-    // Weighted by generation the same way a local Mania run weights by
-    // round, so an online run visibly gets stranger the longer it goes too.
-    const bonus = draft(held, 1, snapshot.generation + 3)[0];
+  // -------------------------------------------------------------------------
+  // The Mania draft
+  // -------------------------------------------------------------------------
 
-    const proceed = () =>
-      this.room.offerRematch().catch((error: unknown) => {
-        this.showError(
-          `Rematch failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
-
-    if (!bonus) {
-      void proceed();
+  /** Open, advance, or close the draft for this snapshot.
+   *
+   * Both clients run this independently and reach the same answer, because
+   * the target is a pure function of the generation and every pick is visible
+   * in the room. Cards are dealt locally for the local seat only -- there is
+   * no need to agree on what was *offered*, only on what was *taken*, and a
+   * pick is a write to your own colour that the database rules already
+   * guarantee only you can make and nobody can rewrite.
+   */
+  private syncDraft(snapshot: RoomSnapshot): void {
+    if (!snapshot.mania || snapshot.seat === 'spectator') {
+      this.closeDraft();
       return;
     }
-    void this.room
-      .addAugment(bonus.id)
-      .then(proceed)
-      .catch((error: unknown) => {
-        this.showError(
-          `Could not add ${bonus.name}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      });
+    const seat = snapshot.seat;
+    const opponent: Color = seat === 'w' ? 'b' : 'w';
+    const target = draftTarget(snapshot.generation);
+    const mine = snapshot.rules.augments?.[seat] ?? [];
+    const theirs = snapshot.rules.augments?.[opponent] ?? [];
+
+    if (mine.length >= target && theirs.length >= target) {
+      this.closeDraft();
+      return;
+    }
+
+    // Nobody moves until both loadouts are settled: a board played under a
+    // ruleset that is still changing is a board the two engines can disagree
+    // about.
+    this.app.setInputLocked(
+      mine.length < target ? 'DRAFT YOUR AUGMENT' : 'WAITING FOR OPPONENT TO DRAFT',
+    );
+    this.dom.modal.hidden = true;
+    this.dom.draftModal.hidden = false;
+    this.dom.draftRound.textContent =
+      `GAME ${snapshot.generation + 1} — PICK ${Math.min(mine.length + 1, target)} OF ${target}`;
+
+    renderHeld(this.dom.draftHeld, mine, 'YOURS');
+    renderHeld(this.dom.draftHeldTheirs, theirs, 'THEIRS');
+
+    if (mine.length >= target) {
+      // Our own draft is done; all that is left is to watch theirs fill in.
+      this.dom.draftCards.replaceChildren();
+      this.dom.draftCards.hidden = true;
+      this.dom.draftStatus.hidden = false;
+      this.dom.draftStatus.textContent = `Waiting for ${
+        snapshot.names[opponent] ?? 'your opponent'
+      } to finish drafting…`;
+      return;
+    }
+
+    this.dom.draftStatus.hidden = true;
+    this.dom.draftCards.hidden = false;
+    this.renderOffers(snapshot, mine);
+  }
+
+  /** Deal (or redeal) the cards for the pick the local seat is on. */
+  private renderOffers(snapshot: RoomSnapshot, held: ReadonlyArray<AugmentId>): void {
+    const key = `${snapshot.generation}:${held.length}`;
+    if (!this.offers || this.offers.key !== key) {
+      // Weighted by how far the run has come, the same way a local Mania run
+      // weights by round, so an online run visibly gets stranger the longer
+      // the two of you keep rematching.
+      const round = snapshot.generation + held.length + 1;
+      this.offers = { key, cards: draft(held, DRAFT_CHOICES, round) };
+    }
+    const cards = this.offers.cards;
+    if (cards.length === 0) {
+      // Every augment in the game is already held. Nothing left to draft.
+      this.dom.draftCards.replaceChildren();
+      this.dom.draftStatus.hidden = false;
+      this.dom.draftStatus.textContent = 'You already hold every augment there is.';
+      return;
+    }
+
+    const host = this.dom.draftCards;
+    host.replaceChildren();
+    for (const a of cards) {
+      const card = augCard(a);
+      card.addEventListener('click', () => this.pick(a, host));
+      host.appendChild(card);
+    }
+  }
+
+  /** Commit one pick to the room. The snapshot it produces is what advances
+   *  the draft — nothing is tracked locally, so a refresh mid-draft picks up
+   *  exactly where it left off. */
+  private pick(choice: Augment, host: HTMLElement): void {
+    sound.tick();
+    for (const button of host.querySelectorAll('button')) {
+      (button as HTMLButtonElement).disabled = true;
+    }
+    void this.room.addAugment(choice.id).catch((error: unknown) => {
+      this.offers = null;
+      this.showError(
+        `Could not draft ${choice.name}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      for (const button of host.querySelectorAll('button')) {
+        (button as HTMLButtonElement).disabled = false;
+      }
+    });
+  }
+
+  private closeDraft(): void {
+    this.dom.draftModal.hidden = true;
+    this.dom.draftCards.replaceChildren();
+    this.offers = null;
+    this.app.setInputLocked(null);
   }
 
   /** Fetch both players' ratings once a pairing exists, and show them. */

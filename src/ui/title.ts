@@ -16,6 +16,18 @@ export class TitleScreen {
   private readonly startBtn = document.getElementById('title-start') as HTMLButtonElement;
 
   constructor() {
+    // An invite link (/?room=ABCD) skips the title outright. Somebody who was
+    // sent a link is already past the "do you want to play" question, and
+    // making them sit through the loop and press START to reach the room they
+    // were invited to is a door in front of an open door.
+    if (new URLSearchParams(window.location.search).get('room')) {
+      this.screen.hidden = true;
+      this.video.removeAttribute('src');
+      screens.show('menu');
+      music.enterMenu();
+      return;
+    }
+
     this.video.src = `${import.meta.env.BASE_URL}video/title.mp4`;
 
     // Autoplay-with-sound is routinely blocked before any gesture. Try right

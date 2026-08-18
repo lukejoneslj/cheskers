@@ -6,7 +6,7 @@
  * against augments without knowing they exist.
  */
 
-import type { AugmentId, AugmentSet, Color } from './types';
+import type { AugmentId } from './types';
 
 export type Rarity = 'common' | 'rare' | 'cursed';
 
@@ -274,27 +274,6 @@ export function augment(id: AugmentId): Augment {
   const found = BY_ID.get(id);
   if (!found) throw new Error(`unknown augment: ${id}`);
   return found;
-}
-
-/** Roll an independent random loadout for each side.
- *
- * This is how online Mania works: there is no synchronised draft protocol,
- * the room simply rolls both loadouts once at creation and stores them, so
- * both clients read the identical ruleset and their engines cannot disagree.
- * Independent rolls mean the two sides get different toys, which is the point
- * — it is the ARAM bargain, not a mirror match. */
-export function rollLoadout(count: number): AugmentSet {
-  const pick = (): AugmentId[] => {
-    const pool = [...AUGMENTS];
-    const out: AugmentId[] = [];
-    for (let i = 0; i < count && pool.length > 0; i++) {
-      const index = Math.floor(Math.random() * pool.length);
-      out.push(pool.splice(index, 1)[0]!.id);
-    }
-    return out;
-  };
-  const set: Record<Color, AugmentId[]> = { w: pick(), b: pick() };
-  return set;
 }
 
 /** How many of a draft's cards are guaranteed common, floor kept low. A card

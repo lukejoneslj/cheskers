@@ -61,6 +61,11 @@
 
         "createdAt": { ".validate": "newData.isNumber()" },
 
+        // Fixed at creation: whether this is a Mania room, and so whether both
+        // clients open the augment draft before each game. A separate flag
+        // from the loadouts themselves, since a drafting room starts empty.
+        "mania": { ".validate": "newData.isBoolean()" },
+
         "generation": {
           // Bumped when both players agree a rematch.
           ".write": "auth != null && (root.child('rooms/' + $code + '/players/w/uid').val() === auth.uid || root.child('rooms/' + $code + '/players/b/uid').val() === auth.uid)",
