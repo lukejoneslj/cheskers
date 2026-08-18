@@ -474,6 +474,15 @@
     <p class="modal-body lobby-status" id="draft-status" hidden></p>
     <div class="held-row" id="draft-held" hidden></div>
     <div class="held-row" id="draft-held-theirs" hidden></div>
+
+    <!-- The draft covers the lobby, so the invite has to be reachable from
+         here too: drafting happens before your opponent has even arrived. -->
+    <div class="draft-share" id="draft-share">
+      <span class="draft-share-label">ROOM</span>
+      <span class="room-code room-code-inline" id="draft-code">----</span>
+      <button id="draft-copy" class="btn" type="button">COPY LINK</button>
+    </div>
+
     <div class="modal-actions">
       <button id="draft-leave" class="btn btn-danger" type="button">LEAVE ROOM</button>
     </div>

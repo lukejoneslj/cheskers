@@ -32,9 +32,9 @@ const el = <T extends HTMLElement>(id: string): T => {
 };
 
 /** How many augments each side drafts before the first game of a Mania room.
- *  Every rematch adds one more on top, so an online run escalates the same
- *  way a local run does. */
-const MANIA_AUGMENTS = 3;
+ *  One, the same as a local run's first round: every rematch adds another on
+ *  top, for as long as the two of you keep playing. */
+const MANIA_AUGMENTS = 1;
 
 /** How many augments a side should hold before the game of this generation
  *  may start. Purely a function of the generation, so both clients agree on
@@ -90,6 +90,8 @@ export class Lobby implements MatchPeer {
     draftHeld: el('draft-held'),
     draftHeldTheirs: el('draft-held-theirs'),
     draftLeave: el<HTMLButtonElement>('draft-leave'),
+    draftCode: el('draft-code'),
+    draftCopy: el<HTMLButtonElement>('draft-copy'),
   };
 
   constructor(private readonly app: App) {
@@ -181,17 +183,10 @@ export class Lobby implements MatchPeer {
       });
     });
 
-    this.dom.copy.addEventListener('click', () => {
-      const url = new URL(window.location.href);
-      url.searchParams.set('room', this.room.roomCode);
-      void navigator.clipboard
-        .writeText(url.toString())
-        .then(() => {
-          this.dom.copy.textContent = 'COPIED!';
-          window.setTimeout(() => (this.dom.copy.textContent = 'COPY LINK'), 1600);
-        })
-        .catch(() => this.showError('Could not copy — select the code manually'));
-    });
+    this.dom.copy.addEventListener('click', () => this.copyInvite(this.dom.copy));
+    // The draft covers the lobby, and drafting starts before your opponent
+    // has joined -- so the invite has to be reachable from there as well.
+    this.dom.draftCopy.addEventListener('click', () => this.copyInvite(this.dom.draftCopy));
 
     // The lobby name and the profile name are the same thing — otherwise a
     // player shows as BOB in the game and PLAYER on the leaderboard.
@@ -280,6 +275,21 @@ export class Lobby implements MatchPeer {
 
   private showError(message: string): void {
     this.dom.error.textContent = message;
+  }
+
+  /** Put an invite link to this room on the clipboard. The link carries the
+   *  code, so whoever opens it lands in the room rather than on the title
+   *  screen with a form to fill in. */
+  private copyInvite(button: HTMLButtonElement): void {
+    const url = new URL(window.location.href);
+    url.searchParams.set('room', this.room.roomCode);
+    void navigator.clipboard
+      .writeText(url.toString())
+      .then(() => {
+        button.textContent = 'COPIED!';
+        window.setTimeout(() => (button.textContent = 'COPY LINK'), 1600);
+      })
+      .catch(() => this.showError('Could not copy — read the code out instead'));
   }
 
   private showWaiting(code: string): void {
@@ -414,8 +424,9 @@ export class Lobby implements MatchPeer {
     );
     this.dom.modal.hidden = true;
     this.dom.draftModal.hidden = false;
+    this.dom.draftCode.textContent = snapshot.code;
     this.dom.draftRound.textContent =
-      `GAME ${snapshot.generation + 1} — PICK ${Math.min(mine.length + 1, target)} OF ${target}`;
+      `GAME ${snapshot.generation + 1} — AUGMENT ${Math.min(mine.length + 1, target)} OF ${target}`;
 
     renderHeld(this.dom.draftHeld, mine, 'YOURS');
     renderHeld(this.dom.draftHeldTheirs, theirs, 'THEIRS');
@@ -425,9 +436,12 @@ export class Lobby implements MatchPeer {
       this.dom.draftCards.replaceChildren();
       this.dom.draftCards.hidden = true;
       this.dom.draftStatus.hidden = false;
-      this.dom.draftStatus.textContent = `Waiting for ${
-        snapshot.names[opponent] ?? 'your opponent'
-      } to finish drafting…`;
+      // Before anyone has taken the other seat there is nobody to wait on --
+      // saying "waiting for your opponent" there reads as though the game is
+      // stuck, when what it actually needs is for you to send the link.
+      this.dom.draftStatus.textContent = snapshot.names[opponent]
+        ? `Waiting for ${snapshot.names[opponent]} to finish drafting…`
+        : 'Nobody has joined yet — send them the link below.';
       return;
     }
 

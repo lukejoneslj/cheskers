@@ -174,9 +174,11 @@ once you stop, closest to 21 without going over wins. Win and you keep
 ### Mania online
 
 Ticking **Mania** when creating a room opens a draft instead of rolling for
-you. Before the first game each player picks three augments, one at a time
-from three cards, and every rematch adds one more pick on top — so an online
-run escalates exactly the way a local one does.
+you. Both players pick one augment from three cards before the first game,
+and every rematch adds one more pick on top — game two is drafted up to two
+augments each, game three to three, for as long as the two of you keep
+playing. That's the local run's escalation, with a human on the other side
+of it.
 
 There is no draft *protocol* to keep in step. The cards are dealt locally for
 your own seat only: the two clients never have to agree on what was
